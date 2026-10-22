@@ -1,11 +1,13 @@
 name: PR checks
 
+# Checks every PR on branch name, target branch, commit messages and the PR template.
+# Approvals are enforced by the ruleset "Protect main and develop" (Required approvals: 1),
+# so there is no separate approval check here.
+
 on:
   pull_request:
     branches: [develop, main]
     types: [opened, edited, synchronize, reopened, ready_for_review]
-  pull_request_review:
-    types: [submitted, dismissed]
 
 permissions:
   contents: read
@@ -14,7 +16,6 @@ permissions:
 jobs:
   gitflow-and-template:
     name: Gitflow & PR template
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,30 +39,3 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           COMMITS: ${{ steps.commits.outputs.list }}
         run: python3 scripts/check_pr.py
-
-  review:
-    name: At least one approval
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check reviews
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          pr=${{ github.event.pull_request.number }}
-          author="${{ github.event.pull_request.user.login }}"
-          # Latest review per reviewer, excluding the author
-          states=$(gh api "repos/${{ github.repository }}/pulls/$pr/reviews" --paginate \
-            --jq "[.[] | select(.user.login != \"$author\" and (.state == \"APPROVED\" or .state == \"CHANGES_REQUESTED\" or .state == \"DISMISSED\"))]
-                  | group_by(.user.login) | map(last.state) | .[]")
-          approved=$(echo "$states" | grep -c '^APPROVED$' || true)
-          changes=$(echo "$states" | grep -c '^CHANGES_REQUESTED$' || true)
-
-          if [ "$changes" -gt 0 ]; then
-            echo "::error::Changes were requested. Address the feedback and ask for a new review."
-            exit 1
-          fi
-          if [ "$approved" -lt 1 ]; then
-            echo "::error::This PR has no approval from another team member yet. Do not merge."
-            exit 1
-          fi
-          echo "Approved by $approved team member(s)."

@@ -117,10 +117,10 @@ When `develop` contains a version that is ready to deliver (e.g. end of a sprint
 1. Ask a team member to review (not yourself).
 2. The reviewer leaves feedback as comments in the PR.
 3. Address the feedback and mark the conversations as *resolved*.
-4. Only merge when **all checks are green**:
+4. Only merge when **both checks are green** and **a team member approved** the PR:
    - *Gitflow & PR template*
    - *Secret scan*
-   - *At least one approval*
+   - the approval is enforced by the ruleset: without it, GitHub shows "Review required" and blocks the merge.
 5. Do **not** click "Delete branch" after merging.
 6. As the very last step, log your time on the Jira ticket.
 
@@ -167,7 +167,7 @@ If the repository is ever made private on GitHub Free, the script still runs but
 |---|---|
 | `.githooks/` | Local Git hooks |
 | `.github/pull_request_template.md` | Mandatory PR template |
-| `.github/workflows/pr-checks.yml` | Checks on every PR (Gitflow, template, approval) |
+| `.github/workflows/pr-checks.yml` | Checks on every PR (branch name, target, commits, PR template) |
 | `.github/workflows/secret-scan.yml` | Scans the full history for secrets with gitleaks (required check) |
 | `.github/workflows/branch-guard.yml` | Detects changes on `main`/`develop` without an approved PR |
 | `scripts/001_setup_github.sh` | GitHub settings and rulesets |
