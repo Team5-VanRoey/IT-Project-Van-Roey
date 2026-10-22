@@ -1,0 +1,41 @@
+name: PR checks
+
+# Checks every PR on branch name, target branch, commit messages and the PR template.
+# Approvals are enforced by the ruleset "Protect main and develop" (Required approvals: 1),
+# so there is no separate approval check here.
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  gitflow-and-template:
+    name: Gitflow & PR template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect commit messages
+        id: commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "list<<EOF"
+            gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits" \
+              --paginate --jq '.[].commit.message | split("\n")[0]'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          COMMITS: ${{ steps.commits.outputs.list }}
+        run: python3 scripts/check_pr.py

@@ -1,0 +1,43 @@
+#!/bin/sh
+# Blocks pushes to main and develop, checks the branch name
+# and forbids deleting branches on the remote.
+# main and develop are only updated through an approved Pull Request on GitHub.
+
+zero="0000000000000000000000000000000000000000"
+pattern='^((feature|bugfix|hotfix)/IT2627T05-[0-9]+(-[A-Za-z0-9_-]+)?|release/[0-9A-Za-z._-]+)$'
+
+while read local_ref local_sha remote_ref remote_sha; do
+  # Tags can be pushed normally
+  case "$remote_ref" in
+    refs/tags/*) continue ;;
+  esac
+
+  branch=${remote_ref#refs/heads/}
+
+  if [ "$local_sha" = "$zero" ]; then
+    echo ""
+    echo "REJECTED: deleting branches on the remote is not allowed ('$branch')."
+    echo ""
+    exit 1
+  fi
+
+  case "$branch" in
+    main|develop)
+      echo ""
+      echo "REJECTED: pushing directly to '$branch' is not allowed."
+      echo "Push your feature branch and open a Pull Request to develop."
+      echo ""
+      exit 1
+      ;;
+  esac
+
+  if ! echo "$branch" | grep -Eq "$pattern"; then
+    echo ""
+    echo "REJECTED: branch name '$branch' does not follow the Gitflow convention."
+    echo "Allowed: feature/IT2627T05-XX, bugfix/IT2627T05-XX, hotfix/IT2627T05-XX, release/x.y.z"
+    echo ""
+    exit 1
+  fi
+done
+
+exit 0
