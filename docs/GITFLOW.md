@@ -27,22 +27,28 @@ IT2627T05-181: add PR template
 ```
 
 ## Scripts
-All scripts are in `scripts/` and are numbered in the order you use them.
-On Windows, run them in **Git Bash**.
+All scripts are in `scripts/` and are numbered in the order you would use them.
+On Windows, run them in **Git Bash** or **WSL** (not in PowerShell).
 
-| Script | Who | When | What it does |
-|---|---|---|---|
-| `001_setup_github.sh` | Admin | Once | Applies the GitHub settings (see below) |
-| `002_setup_hooks.sh` | Everyone | Once after cloning | Activates the Git hooks |
-| `003_test_hooks.sh` | Everyone | After 002, or after changing a hook | Tests the hooks and the PR check in a temporary test repository |
-| `004_check_pr.sh` | Everyone | Before opening a PR | Checks your branch, commits and PR description |
-| `005_scan_secrets.sh` | Everyone | Before opening a PR | Scans the full Git history for secrets (gitleaks) and shows open GitHub secret scanning alerts |
-| `006_open_pr.sh` | Everyone | To open the PR | Runs 005 and 004, pushes the branch, opens the PR and waits for the GitHub checks |
+**You only have to run `002` once per clone.** Everything else is either done once by the admin or optional:
+GitHub runs the same checks automatically on every PR.
+
+| Script | Required? | Who | When | What it does |
+|---|---|---|---|---|
+| `001_setup_github.sh` | Once, admin only | Admin | Once for the whole repository (already done) | Applies the GitHub settings and rulesets (see below) |
+| `002_setup_hooks.sh` | **Required** | Everyone | Once per clone (again only after a new clone or on another computer) | Activates the Git hooks; after that they run automatically on every `git commit` and `git push` |
+| `003_test_hooks.sh` | Optional | Everyone | Once after 002 to verify, or after changing a hook | Tests the hooks and the PR check in a temporary test repository |
+| `004_check_pr.sh` | Optional | Everyone | Before opening a PR, if you want to know in advance | Checks your branch, commits and PR description (GitHub does the same automatically) |
+| `005_scan_secrets.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Scans the full Git history for secrets (GitHub does the same automatically on every PR) |
+| `006_open_pr.sh` | Optional | Everyone | Only if you prefer the terminal over the website | Runs 005 and 004, pushes the branch, opens the PR and waits for the GitHub checks |
+
+Forgot to run `002`? Nothing can go wrong on `main` or `develop`: the rulesets on GitHub still block it.
+The hooks only give you faster feedback on your own computer.
 
 `003`, `004` and `006` need Python 3. `001` and `006` need the GitHub CLI (`gh auth login`).
 `005` uses gitleaks when installed, otherwise Docker, otherwise a basic pattern search.
 
-### Opening a PR in one command
+### Opening a PR in one command (optional)
 ```bash
 cp .github/pull_request_template.md ../pr-body.md     # fill it in
 sh scripts/006_open_pr.sh ../pr-body.md "Short title"
@@ -52,10 +58,10 @@ Running it again updates the description of the existing PR.
 
 ## Once after cloning
 ```bash
-git clone <repo-url>
-cd <repo>
-sh scripts/002_setup_hooks.sh
-sh scripts/003_test_hooks.sh
+git clone https://github.com/Team5-VanRoey/IT-Project-Van-Roey.git
+cd IT-Project-Van-Roey
+sh scripts/002_setup_hooks.sh      # required
+sh scripts/003_test_hooks.sh       # optional: verify that everything works
 ```
 `002_setup_hooks.sh` activates the hooks in `.githooks/`:
 
@@ -77,8 +83,15 @@ git add .
 git commit -m "IT2627T05-XX: short description"
 git push -u origin feature/IT2627T05-XX
 ```
+Then open the PR on GitHub:
+1. Click **Compare & pull request** in the yellow bar (or **Pull requests → New pull request**).
+2. Check: base `develop` ← compare `feature/IT2627T05-XX`.
+3. Title: `IT2627T05-XX: short description`.
+4. The PR template is filled in automatically: complete every section and tick the checklist.
+5. Choose a team member as **Reviewer** and click **Create pull request**.
+6. Wait until the checks *Gitflow & PR template* and *Secret scan* are green. If one is red, click **Details**, fix it and update the PR.
 
-## Checking locally before opening a PR
+## Checking locally before opening a PR (optional)
 ```bash
 sh scripts/004_check_pr.sh                       # branch name, target and commits
 sh scripts/004_check_pr.sh ../pr-body.md         # also the completed PR description
@@ -165,3 +178,13 @@ If the repository is ever made private on GitHub Free, the script still runs but
 | `scripts/006_open_pr.sh` | Run all checks and open the PR |
 | `scripts/check_pr.py` | The check logic, shared by GitHub and `004_check_pr.sh` |
 | `docs/GITFLOW.md` | This guide |
+| `.gitattributes` | Forces LF line endings for scripts and hooks, so they also work on Windows |
+
+## Troubleshooting on Windows
+| Problem | Cause | Fix |
+|---|---|---|
+| `$'\r': command not found`, `Syntax error: end of file unexpected` | Windows line endings (CRLF) in the scripts | `sed -i 's/\r$//' .githooks/* scripts/*.sh` (with `.gitattributes` this should not happen anymore) |
+| `sh: command not found` in PowerShell | The scripts are shell scripts | Run them in Git Bash or WSL |
+| `git status` shows many files with `old mode 100644 / new mode 100755` (WSL) | File permissions on the Windows drive | `git config core.fileMode false` |
+| `Deletion of directory 'scripts' failed` when switching branches | Another program has the folder open | Close your IDE, Explorer windows and terminals in that folder, answer `n` |
+| `Unable to read current working directory` (WSL) | The folder was recreated by Git on the Windows side | `cd` into the repository again |
