@@ -11,7 +11,7 @@ var api = builder.AddProject<Projects.ProjectControl_Api>("api", launchProfileNa
     .WaitFor(database)
     .WithHttpHealthCheck("/health");
 
-builder.AddViteApp("web", "../../Frontend")
+builder.AddViteApp("web", "../../frontend")
     .WithReference(api)
     .WaitFor(api)
     .WithExternalHttpEndpoints();

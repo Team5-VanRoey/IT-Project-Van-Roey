@@ -118,7 +118,10 @@ cat > "$tmp/main-develop.json" <<'EOF'
         "strict_required_status_checks_policy": false,
         "required_status_checks": [
           { "context": "Gitflow & PR template" },
-          { "context": "Secret scan" }
+          { "context": "Secret scan" },
+          { "context": "Build & test" },
+          { "context": "SonarCloud quality gate" },
+          { "context": "Dependency scan" }
         ]
       }
     }

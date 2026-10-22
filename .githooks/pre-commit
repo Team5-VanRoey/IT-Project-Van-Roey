@@ -1,4 +1,3 @@
-cat > .githooks/pre-commit <<'EOF'
 #!/bin/sh
 # 1. Blocks commits directly on main and develop.
 # 2. Checks that the current branch follows the Gitflow naming convention.
@@ -62,4 +61,3 @@ if [ "$status" -ne 0 ]; then
 fi
 
 exit 0
-EOF
