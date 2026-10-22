@@ -1,6 +1,16 @@
 @ProjectControl.Api_HostAddress = http://localhost:5244
 
-GET {{ProjectControl.Api_HostAddress}}/weatherforecast/
+GET {{ProjectControl.Api_HostAddress}}/api/projects
 Accept: application/json
+
+###
+
+POST {{ProjectControl.Api_HostAddress}}/api/projects
+Content-Type: application/json
+
+{
+  "name": "Demo Klant - D365 Sales",
+  "customerName": "Demo Klant"
+}
 
 ###

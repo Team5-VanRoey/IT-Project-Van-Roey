@@ -8,11 +8,16 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ProjectControl.AppLogic\ProjectControl.AppLogic.csproj" />
     <ProjectReference Include="..\ProjectControl.Infrastructure\ProjectControl.Infrastructure.csproj" />
+    <ProjectReference Include="..\ProjectControl.ServiceDefaults\ProjectControl.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

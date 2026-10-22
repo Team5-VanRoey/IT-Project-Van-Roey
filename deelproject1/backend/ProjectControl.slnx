@@ -1,9 +1,12 @@
 <Solution>
   <Project Path="ProjectControl.Api.Tests/ProjectControl.Api.Tests.csproj" />
   <Project Path="ProjectControl.Api/ProjectControl.Api.csproj" />
+  <Project Path="ProjectControl.AppHost/ProjectControl.AppHost.csproj" />
   <Project Path="ProjectControl.AppLogic.Tests/ProjectControl.AppLogic.Tests.csproj" />
   <Project Path="ProjectControl.AppLogic/ProjectControl.AppLogic.csproj" />
   <Project Path="ProjectControl.Domain.Tests/ProjectControl.Domain.Tests.csproj" />
   <Project Path="ProjectControl.Domain/ProjectControl.Domain.csproj" />
+  <Project Path="ProjectControl.Infrastructure.Tests/ProjectControl.Infrastructure.Tests.csproj" />
   <Project Path="ProjectControl.Infrastructure/ProjectControl.Infrastructure.csproj" />
+  <Project Path="ProjectControl.ServiceDefaults/ProjectControl.ServiceDefaults.csproj" />
 </Solution>
