@@ -10,6 +10,18 @@
 | `hotfix/IT2627T05-XX` | Urgent bug on `main` | PR to `main` and to `develop` |
 | `release/x.y.z` | Preparing a delivery | PR to `main` |
 
+### DTAP environments
+Every long-lived branch belongs to one environment. Code only moves forward through a merge, never by deploying a work branch directly.
+
+| Environment | Branch | Deployed | By |
+|---|---|---|---|
+| **D**evelopment | `feature/*`, `bugfix/*` | not deployed: your own computer + CI on the PR | – |
+| **T**est | `develop` | automatically after every merge | `CD` workflow |
+| **A**cceptance | `release/x.y.z` | automatically after every push | `CD` workflow |
+| **P**roduction | `main` | after a merge, **only after manual approval** | `CD` workflow |
+
+`hotfix/*` is never deployed on its own: it reaches production through its PR to `main`. See `docs/CI_CD.md`.
+
 ### Naming
 - The ticket number is always uppercase: `feature/IT2627T05-181`.
 - A short description at the end is allowed: `feature/IT2627T05-181-pr-template`.
@@ -41,6 +53,10 @@ GitHub runs the same checks automatically on every PR.
 | `004_check_pr.sh` | Optional | Everyone | Before opening a PR, if you want to know in advance | Checks your branch, commits and PR description (GitHub does the same automatically) |
 | `005_scan_secrets.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Scans the full Git history for secrets (GitHub does the same automatically on every PR) |
 | `006_open_pr.sh` | Optional | Everyone | Only if you prefer the terminal over the website | Runs 005 and 004, pushes the branch, opens the PR and waits for the GitHub checks |
+| `007_setup_sonarcloud.sh` | Once, admin only | Admin | Once (already done) | SonarCloud project, quality gate (coverage ≥ 80%), `SONAR_TOKEN` secret |
+| `008_setup_environments.sh` | Once, admin only | Admin | Once (already done) | DTAP environments `test`, `acceptance`, `production` on GitHub |
+| `009_build_test.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Build + tests + coverage ≥ 80% (same as the *Build & test* check) |
+| `010_deploy.sh` | – | GitHub | Automatically, by the `CD` workflow | Builds the Docker image and deploys it to test, acceptance or production |
 
 Forgot to run `002`? Nothing can go wrong on `main` or `develop`: the rulesets on GitHub still block it.
 The hooks only give you faster feedback on your own computer.
@@ -48,11 +64,31 @@ The hooks only give you faster feedback on your own computer.
 `003`, `004` and `006` need Python 3. `001` and `006` need the GitHub CLI (`gh auth login`).
 `005` uses gitleaks when installed, otherwise Docker, otherwise a basic pattern search.
 
+## PR templates
+Every branch type has its own PR template, with extra sections for that type:
+
+| Branch | Template | Extra sections |
+|---|---|---|
+| `feature/*` | `.github/pull_request_template.md` (default) | – |
+| `bugfix/*` | `.github/PULL_REQUEST_TEMPLATE/bugfix.md` | Bug (reproduce, expected/actual), Root cause, regression test |
+| `hotfix/*` | `.github/PULL_REQUEST_TEMPLATE/hotfix.md` | Production impact, Root cause, Rollback plan, PR back to `develop` |
+| `release/*`, `develop` → `main` | `.github/PULL_REQUEST_TEMPLATE/release.md` | Included tickets, Acceptance (sign-off on the acceptance environment) |
+
+**The right template is chosen automatically from your branch name.** On the website GitHub first shows the default (feature) template; just click **Create pull request**. The *PR checks* workflow then replaces the description with the template of your branch type within a few seconds. Reload the page, click **Edit** on the description and fill it in. The *Gitflow & PR template* check stays red until it is complete, and runs again after every edit.
+
+Want the right template before creating the PR? Add `&template=<name>.md` to the URL:
+```
+https://github.com/Team5-VanRoey/IT-Project-Van-Roey/compare/develop...bugfix/IT2627T05-XX?expand=1&template=bugfix.md
+```
+The scripts `004` and `006` also pick the right template from your branch name.
+
 ### Opening a PR in one command (optional)
 ```bash
-cp .github/pull_request_template.md ../pr-body.md     # fill it in
-sh scripts/006_open_pr.sh ../pr-body.md "Short title"
+sh scripts/006_open_pr.sh ../pr-body.md "Short title"   # 1st time: creates ../pr-body.md from the right template
+# fill in ../pr-body.md
+sh scripts/006_open_pr.sh ../pr-body.md "Short title"   # 2nd time: checks, pushes and opens the PR
 ```
+`hotfix/*` and `release/*` target `main` by default. After a hotfix the script reminds you to open the second PR to `develop`.
 The PR title becomes `IT2627T05-XX: Short title` (ticket taken from the branch name).
 Running it again updates the description of the existing PR.
 
@@ -67,11 +103,13 @@ sh scripts/003_test_hooks.sh       # optional: verify that everything works
 
 | Hook | Runs on | Checks |
 |---|---|---|
-| `pre-commit` | `git commit` | no commits on `main`/`develop`, correct branch name |
+| `pre-commit` | `git commit` | no commits on `main`/`develop`, correct branch name, Gitleaks secret scan of the staged changes |
 | `commit-msg` | `git commit` | message starts with `IT2627T05-XX: ` |
 | `pre-push` | `git push` | no pushes to `main`/`develop`, correct branch name, no deleting remote branches |
 
-`003_test_hooks.sh` ends with `Result: 23 passed, 0 failed` when everything works.
+The `pre-commit` hook needs **Gitleaks** (`winget install Gitleaks.Gitleaks`, `brew install gitleaks` or the [releases page](https://github.com/gitleaks/gitleaks/releases)); without it every commit is rejected.
+
+`003_test_hooks.sh` ends with `Result: 31 passed, 0 failed` when everything works.
 
 ## Working on a ticket
 ```bash
@@ -87,19 +125,21 @@ Then open the PR on GitHub:
 1. Click **Compare & pull request** in the yellow bar (or **Pull requests → New pull request**).
 2. Check: base `develop` ← compare `feature/IT2627T05-XX`.
 3. Title: `IT2627T05-XX: short description`.
-4. The PR template is filled in automatically: complete every section and tick the checklist.
+4. The PR template is filled in automatically. For a bugfix, hotfix or release it is swapped for the right template right after you create the PR (see **PR templates**). Complete every section and tick the checklist.
 5. Choose a team member as **Reviewer** and click **Create pull request**.
-6. Wait until the checks *Gitflow & PR template* and *Secret scan* are green. If one is red, click **Details**, fix it and update the PR.
+6. Wait until all required checks are green (see **Review and merge**). If one is red, click **Details**, fix it and update the PR.
 
 ## Checking locally before opening a PR (optional)
 ```bash
 sh scripts/004_check_pr.sh                       # branch name, target and commits
 sh scripts/004_check_pr.sh ../pr-body.md         # also the completed PR description
-sh scripts/004_check_pr.sh ../pr-body.md main    # for a release or hotfix PR to main
+sh scripts/004_check_pr.sh ../pr-body.md develop # e.g. the second hotfix PR, to develop
 ```
+hotfix/* and release/* are checked against `main` by default, all other branches against `develop`.
+
 For the PR description:
-1. Copy `.github/pull_request_template.md` to a file **outside** the repository, e.g. `../pr-body.md`.
-2. Fill it in and check it with `004_check_pr.sh`.
+1. Run `004_check_pr.sh ../pr-body.md`: the first time it creates `../pr-body.md` from the template of your branch type (**outside** the repository).
+2. Fill it in and run `004_check_pr.sh ../pr-body.md` again.
 3. When it passes, paste the same text into the PR on GitHub.
 
 This is the same check that GitHub runs on every PR as **Gitflow & PR template** (`scripts/check_pr.py`). If it passes locally, it passes on GitHub.
@@ -117,9 +157,12 @@ When `develop` contains a version that is ready to deliver (e.g. end of a sprint
 1. Ask a team member to review (not yourself).
 2. The reviewer leaves feedback as comments in the PR.
 3. Address the feedback and mark the conversations as *resolved*.
-4. Only merge when **both checks are green** and **a team member approved** the PR:
+4. Only merge when **all checks are green** and **a team member approved** the PR:
    - *Gitflow & PR template*
    - *Secret scan*
+   - *Build & test* (build, tests, coverage ≥ 80%)
+   - *SonarCloud quality gate*
+   - *Dependency scan* (no HIGH/CRITICAL vulnerabilities in dependencies)
    - the approval is enforced by the ruleset: without it, GitHub shows "Review required" and blocks the merge.
 5. Do **not** click "Delete branch" after merging.
 6. As the very last step, log your time on the Jira ticket.
@@ -132,7 +175,7 @@ The repository is public, so GitHub enforces the rules itself. There are three l
    - merging only through a PR with at least 1 approval from another team member;
    - new commits after an approval require a new approval;
    - all review conversations must be resolved;
-   - the checks **Gitflow & PR template** and **Secret scan** must pass;
+   - the checks **Gitflow & PR template**, **Secret scan**, **Build & test**, **SonarCloud quality gate** and **Dependency scan** must pass;
    - `feature/**`, `bugfix/**`, `hotfix/**` and `release/**` cannot be deleted;
    - only branches named `main`, `develop`, `feature/IT2627T05-*`, `bugfix/IT2627T05-*`, `hotfix/IT2627T05-*` or `release/*` can be created.
 2. **Local hooks** – give feedback already on `git commit` and `git push`, before GitHub rejects anything.
@@ -166,8 +209,13 @@ If the repository is ever made private on GitHub Free, the script still runs but
 | File | Purpose |
 |---|---|
 | `.githooks/` | Local Git hooks |
-| `.github/pull_request_template.md` | Mandatory PR template |
-| `.github/workflows/pr-checks.yml` | Checks on every PR (branch name, target, commits, PR template) |
+| `.github/pull_request_template.md` | Default PR template (feature) |
+| `.github/PULL_REQUEST_TEMPLATE/` | PR templates for bugfix, hotfix and release |
+| `.github/workflows/ci.yml` | Build & test, SonarCloud quality gate, Dependency scan (required checks) |
+| `.github/workflows/cd.yml` | DTAP deployment: develop → test, release/* → acceptance, main → production |
+| `.github/dependabot.yml` | Weekly dependency updates |
+| `sonar-project.properties` | SonarCloud configuration (generated by `007`) |
+| `.github/workflows/pr-checks.yml` | Sets the PR template per branch type and checks every PR (branch name, target, commits, PR template) |
 | `.github/workflows/secret-scan.yml` | Scans the full history for secrets with gitleaks (required check) |
 | `.github/workflows/branch-guard.yml` | Detects changes on `main`/`develop` without an approved PR |
 | `scripts/001_setup_github.sh` | GitHub settings and rulesets |
@@ -176,8 +224,15 @@ If the repository is ever made private on GitHub Free, the script still runs but
 | `scripts/004_check_pr.sh` | Check your branch and PR description locally |
 | `scripts/005_scan_secrets.sh` | Scan for secrets locally |
 | `scripts/006_open_pr.sh` | Run all checks and open the PR |
+| `scripts/007_setup_sonarcloud.sh` | SonarCloud project and quality gate |
+| `scripts/008_setup_environments.sh` | DTAP environments on GitHub |
+| `scripts/009_build_test.sh` | Build, tests and coverage check |
+| `scripts/010_deploy.sh` | Deployment, used by the `CD` workflow |
+| `scripts/pr_template.sh` | Picks the PR template per branch type, shared by `004`, `006` and *PR checks* |
 | `scripts/check_pr.py` | The check logic, shared by GitHub and `004_check_pr.sh` |
 | `docs/GITFLOW.md` | This guide |
+| `docs/CI_CD.md` | CI/CD pipeline and DTAP |
+| `docs/QUALITY_AND_SECURITY.md` | Quality rules and security policy |
 | `.gitattributes` | Forces LF line endings for scripts and hooks, so they also work on Windows |
 
 ## Troubleshooting on Windows
