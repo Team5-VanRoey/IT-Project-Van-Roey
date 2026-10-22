@@ -1,0 +1,15 @@
+.dashboard-page {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--surface-page);
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 40px 32px;
+}
+
+.dashboard-content p {
+  margin-top: 8px;
+  color: var(--text-secondary);
+}
