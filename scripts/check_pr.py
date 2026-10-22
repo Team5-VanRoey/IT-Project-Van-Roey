@@ -10,6 +10,17 @@ import sys
 
 TICKET = r"IT2627T05-\d+"
 
+# Checklist items that can only be ticked after this check has run. GitHub enforces them itself:
+# the rulesets require the green checks (incl. Secret scan), at least 1 approval and resolved
+# conversations before merging. Logging time in Jira happens after the merge.
+ENFORCED_ELSEWHERE = (
+    "the pipeline passed",
+    "secret scan in the pipeline",
+    "approved this pr",
+    "conversations are resolved",
+    "will be logged",
+)
+
 body = os.environ.get("PR_BODY", "") or ""
 head = os.environ.get("HEAD_REF", "")
 base = os.environ.get("BASE_REF", "")
@@ -22,7 +33,7 @@ develop_to_main = head == "develop" and base == "main"
 
 # 1. Branch name
 if not develop_to_main and not re.fullmatch(
-    rf"(feature|bugfix|hotfix)/{TICKET}(-[\w-]+)?|release/[\w.\-]+", head
+        rf"(feature|bugfix|hotfix)/{TICKET}(-[\w-]+)?|release/[\w.\-]+", head
 ):
     errors.append(
         f"Branch name '{head}' does not follow the convention "
@@ -68,14 +79,27 @@ else:
     if len(strip_comments(section("Description"))) < 20:
         errors.append("Section 'Description' is empty or too short.")
 
-    if not re.search(r"Tests performed:[ \t]*\S", strip_comments(section("Test results"))):
+    test_results = strip_comments(section("Test results"))
+    if not re.search(r"Tests performed:[ \t]*\S", test_results):
         errors.append("Section 'Test results': fill in at least 'Tests performed'.")
+
+    # Definition of Done: pre-commit hooks passed and --no-verify was never used
+    if not re.search(r"Pre-commit hooks:.*\(yes\s*/\s*no\):[ \t]*yes\b", test_results, re.I):
+        errors.append(
+            "Section 'Test results': confirm the pre-commit hooks with 'yes' "
+            "(passed on every commit, --no-verify not used)."
+        )
+
+    if len(strip_comments(section("Security analysis"))) < 20:
+        errors.append("Section 'Security analysis' is empty or too short.")
 
     checklist = body[body.find("## Checklist"):] if "## Checklist" in body else ""
     if not checklist:
         errors.append("The Definition of Done checklist is missing.")
-    # Logging time happens after the merge, so that item may still be open
-    open_items = [i for i in re.findall(r"- \[ \] (.+)", checklist) if "will be logged" not in i]
+    open_items = [
+        i for i in re.findall(r"- \[ \] (.+)", checklist)
+        if not any(p in i.lower() for p in ENFORCED_ELSEWHERE)
+    ]
     for item in open_items:
         errors.append(f"Checklist item not ticked: {item.strip()}")
 

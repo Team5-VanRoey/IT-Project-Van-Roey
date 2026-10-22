@@ -95,7 +95,16 @@ else
     -e 's/IT2627T05-XX$/IT2627T05-181/' \
     -e 's/- \[ \]/- [x]/' \
     -e 's/^- Tests performed:/- Tests performed: hooks tested with 003_test_hooks.sh/' \
-    -e 's/^<!-- What changed.*-->/Added the PR template, Git hooks and GitHub Actions for the Gitflow process./')
+    -e 's|(yes / no):$|(yes / no): yes|' \
+    -e 's/^<!-- What changed.*-->/Added the PR template, Git hooks and GitHub Actions for the Gitflow process./' \
+    -e '/^## Security analysis/a\
+Only configuration, workflows and scripts; no secrets or personal data.')
+  # Same PR, but the pre-commit hooks are not confirmed
+  nohooks=$(printf '%s\n' "$filled" | sed 's|(yes / no): yes|(yes / no): no|')
+  # Same PR, but only the items GitHub enforces itself are still open
+  open_enforced=$(printf '%s\n' "$filled" | sed \
+    -e 's/- \[x\] The pipeline passed/- [ ] The pipeline passed/' \
+    -e 's/- \[x\] At least one other team member/- [ ] At least one other team member/')
 
   # pr <body> <head> <base> <commits>
   pr() { PR_BODY="$1" HEAD_REF="$2" BASE_REF="$3" COMMITS="$4" "$py" "$root/scripts/check_pr.py"; }
@@ -104,6 +113,8 @@ else
   echo "== PR check (scripts/check_pr.py)"
   expect fail "empty PR template"                   pr "$tpl"    feature/IT2627T05-181 develop "IT2627T05-181: x"
   expect ok   "fully completed PR template"         pr "$filled" feature/IT2627T05-181 develop "IT2627T05-181: x"
+  expect ok   "review and pipeline items still open" pr "$open_enforced" feature/IT2627T05-181 develop "IT2627T05-181: x"
+  expect fail "pre-commit hooks not confirmed"      pr "$nohooks" feature/IT2627T05-181 develop "IT2627T05-181: x"
   expect fail "PR with commit without ticket"       pr "$filled" feature/IT2627T05-181 develop "quick fix"
   expect fail "feature branch targeting main"       pr "$filled" feature/IT2627T05-181 main    "IT2627T05-181: x"
   expect fail "PR from branch with wrong name"      pr "$filled" my-branch             develop "IT2627T05-181: x"
