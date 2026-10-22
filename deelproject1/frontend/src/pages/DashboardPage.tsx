@@ -1,3 +1,4 @@
+import EntraTestPanel from '../components/EntraTestPanel'
 import Sidebar from '../components/Sidebar'
 import './DashboardPage.css'
 
@@ -13,6 +14,8 @@ function DashboardPage({ onLogout }: DashboardPageProps) {
       <main className="dashboard-content">
         <h1>Dashboard</h1>
         <p>Hier komt het overzicht van je projecten.</p>
+
+        {import.meta.env.DEV && <EntraTestPanel />}
       </main>
     </div>
   )
