@@ -42,5 +42,3 @@ public class ProjectsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = project.Id }, project);
     }
 }
-
-public record CreateProjectRequest(string Name, string CustomerName);
