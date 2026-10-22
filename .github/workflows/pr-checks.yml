@@ -1,41 +1,55 @@
+# Checks every Pull Request against the Gitflow and PR template rules (scripts/check_pr.py).
+#
+# GitHub's website always fills in the default (feature) template. For bugfix/*, hotfix/*,
+# release/* and develop -> main this workflow replaces that default (or an empty description)
+# with the right template from .github/PULL_REQUEST_TEMPLATE/ as soon as the PR is opened.
+# The check then fails until the template is filled in; every edit runs it again.
 name: PR checks
-
-# Checks every PR on branch name, target branch, commit messages and the PR template.
-# Approvals are enforced by the ruleset "Protect main and develop" (Required approvals: 1),
-# so there is no separate approval check here.
 
 on:
   pull_request:
-    branches: [develop, main]
-    types: [opened, edited, synchronize, reopened, ready_for_review]
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
 
 jobs:
-  gitflow-and-template:
-    name: Gitflow & PR template
+  gitflow:
+    name: Gitflow & PR template   # required check in the ruleset: do not rename
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Collect commit messages
-        id: commits
+      - name: Use the PR template for this branch type
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            echo "list<<EOF"
-            gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits" \
-              --paginate --jq '.[].commit.message | split("\n")[0]'
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Check
-        env:
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
           PR_BODY: ${{ github.event.pull_request.body }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          COMMITS: ${{ steps.commits.outputs.list }}
-        run: python3 scripts/check_pr.py
+        run: |
+          . scripts/pr_template.sh
+          template=$(pr_template_for "$HEAD_REF")
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/body.md"
+
+          empty=$(printf '%s' "$PR_BODY" | tr -d '[:space:]')
+          if [ "$template" != ".github/pull_request_template.md" ] && \
+             { [ -z "$empty" ] || grep -q 'Functionality & SMART-Fit' "$RUNNER_TEMP/body.md"; }; then
+            if gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$template"; then
+              echo "Description replaced by $template. Fill it in on the PR page."
+              cp "$template" "$RUNNER_TEMP/body.md"
+            else
+              echo "::warning::Could not replace the description (e.g. PR from a fork). Use $template."
+            fi
+          fi
+
+      - name: Check branch, commits and description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          COMMITS=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/commits" --paginate \
+                      --jq '.[].commit.message | split("\n")[0]')
+          PR_BODY=$(cat "$RUNNER_TEMP/body.md") COMMITS="$COMMITS" python3 scripts/check_pr.py

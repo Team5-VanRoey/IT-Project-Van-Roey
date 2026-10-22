@@ -90,15 +90,25 @@ if [ -z "$py" ]; then
   echo ""
   echo "== PR check skipped: Python 3 not found."
 else
+  # fill <template file> <ticket>: completes every section of a PR template
+  fill() {
+    sed -E \
+      -e "s/IT2627T05-XX/$2/g" \
+      -e 's/- \[ \]/- [x]/' \
+      -e 's|\(yes / no\):[[:space:]]*$|(yes / no): yes|' \
+      -e 's/^- (Tests performed|Steps to reproduce|Expected \/ actual|Severity \(critical \/ high\)|What do users experience|Accepted by):[[:space:]]*$/- \1: filled in by 003_test_hooks.sh/' \
+      -e '/^## (Description|Root cause|Rollback plan|Security analysis)/a\
+This section was filled in by the test script with enough text.' \
+      "$1"
+  }
+
+  t="$root/.github/PULL_REQUEST_TEMPLATE"
   tpl=$(cat "$root/.github/pull_request_template.md")
-  filled=$(printf '%s\n' "$tpl" | sed \
-    -e 's/IT2627T05-XX$/IT2627T05-181/' \
-    -e 's/- \[ \]/- [x]/' \
-    -e 's/^- Tests performed:/- Tests performed: hooks tested with 003_test_hooks.sh/' \
-    -e 's|(yes / no):$|(yes / no): yes|' \
-    -e 's/^<!-- What changed.*-->/Added the PR template, Git hooks and GitHub Actions for the Gitflow process./' \
-    -e '/^## Security analysis/a\
-Only configuration, workflows and scripts; no secrets or personal data.')
+  filled=$(fill "$root/.github/pull_request_template.md" IT2627T05-181)
+  bugfix_empty=$(cat "$t/bugfix.md")
+  bugfix=$(fill "$t/bugfix.md" IT2627T05-200)
+  hotfix=$(fill "$t/hotfix.md" IT2627T05-220)
+  release=$(fill "$t/release.md" IT2627T05-210)
   # Same PR, but the pre-commit hooks are not confirmed
   nohooks=$(printf '%s\n' "$filled" | sed 's|(yes / no): yes|(yes / no): no|')
   # Same PR, but only the items GitHub enforces itself are still open
@@ -118,9 +128,18 @@ Only configuration, workflows and scripts; no secrets or personal data.')
   expect fail "PR with commit without ticket"       pr "$filled" feature/IT2627T05-181 develop "quick fix"
   expect fail "feature branch targeting main"       pr "$filled" feature/IT2627T05-181 main    "IT2627T05-181: x"
   expect fail "PR from branch with wrong name"      pr "$filled" my-branch             develop "IT2627T05-181: x"
-  expect ok   "release branch targeting main"       pr "$filled" release/1.0.0         main    "IT2627T05-210: x"
-  expect ok   "develop targeting main"              pr "$filled" develop               main    "IT2627T05-181: x"
   expect fail "develop targeting develop"           pr "$filled" develop               develop "IT2627T05-181: x"
+
+  echo ""
+  echo "== PR check per branch type (bugfix, hotfix, release templates)"
+  expect fail "empty bugfix template"               pr "$bugfix_empty" bugfix/IT2627T05-200 develop "IT2627T05-200: x"
+  expect ok   "completed bugfix template"           pr "$bugfix"  bugfix/IT2627T05-200  develop "IT2627T05-200: x"
+  expect fail "bugfix PR with the feature template" pr "$filled"  bugfix/IT2627T05-200  develop "IT2627T05-200: x"
+  expect ok   "completed hotfix template to main"   pr "$hotfix"  hotfix/IT2627T05-220  main    "IT2627T05-220: x"
+  expect ok   "same hotfix to develop"              pr "$hotfix"  hotfix/IT2627T05-220  develop "IT2627T05-220: x"
+  expect ok   "completed release template to main"  pr "$release" release/1.0.0         main    "IT2627T05-210: x"
+  expect ok   "develop targeting main (release)"    pr "$release" develop               main    "IT2627T05-181: x"
+  expect fail "release branch targeting develop"    pr "$release" release/1.0.0         develop "IT2627T05-210: x"
 fi
 
 echo ""
