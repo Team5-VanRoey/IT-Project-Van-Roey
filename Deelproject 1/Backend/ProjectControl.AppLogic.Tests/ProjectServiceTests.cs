@@ -10,13 +10,13 @@ public class ProjectServiceTests
     {
         var service = new ProjectService(new FakeProjectRepository());
 
-        var created = await service.CreateAsync("Nanogrid - D365 Sales", "Nanogrid");
+        var created = await service.CreateAsync("Demo Klant - D365 Sales", "Demo Klant");
         var found = await service.GetByIdAsync(created.Id);
         var allProjects = await service.GetAllAsync();
 
         Assert.NotNull(found);
-        Assert.Equal("Nanogrid - D365 Sales", found.Name);
-        Assert.Equal("Nanogrid", found.CustomerName);
+        Assert.Equal("Demo Klant - D365 Sales", found.Name);
+        Assert.Equal("Demo Klant", found.CustomerName);
         Assert.Empty(found.Milestones);
         Assert.Single(allProjects);
     }
