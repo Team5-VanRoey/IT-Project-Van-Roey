@@ -14,3 +14,10 @@ Content-Type: application/json
 }
 
 ###
+
+# Needs a bearer token; easiest to test via the "Entra ID test" block on the dashboard (dev only)
+GET {{ProjectControl.Api_HostAddress}}/api/me
+Accept: application/json
+Authorization: Bearer <access-token>
+
+###

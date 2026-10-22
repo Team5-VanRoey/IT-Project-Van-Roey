@@ -22,10 +22,11 @@ function InfoIcon() {
 }
 
 type LoginPageProps = {
+  onLogin: () => void
   onSkipLogin: () => void
 }
 
-function LoginPage({ onSkipLogin }: LoginPageProps) {
+function LoginPage({ onLogin, onSkipLogin }: LoginPageProps) {
   return (
     <div className="login-page">
       <section className="login-hero">
@@ -53,7 +54,7 @@ function LoginPage({ onSkipLogin }: LoginPageProps) {
           <h2 className="login-title">Aanmelden</h2>
           <p className="login-text">Gebruik je zakelijke Microsoft-account om verder te gaan.</p>
 
-          <button type="button" className="microsoft-button">
+          <button type="button" className="microsoft-button" onClick={onLogin}>
             <MicrosoftIcon />
             Aanmelden met Microsoft
           </button>
