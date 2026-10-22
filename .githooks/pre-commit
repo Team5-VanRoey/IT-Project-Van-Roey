@@ -1,0 +1,33 @@
+#!/bin/sh
+# 1. Blocks commits directly on main and develop.
+# 2. Checks that the current branch follows the Gitflow naming convention.
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# No branch (e.g. during a rebase): nothing to check
+[ -z "$branch" ] && exit 0
+
+case "$branch" in
+  main|develop)
+    echo ""
+    echo "REJECTED: committing directly on '$branch' is not allowed."
+    echo "Create a feature branch from develop:"
+    echo "  git stash"
+    echo "  git checkout develop && git pull"
+    echo "  git checkout -b feature/IT2627T05-XX"
+    echo "  git stash pop"
+    echo ""
+    exit 1
+    ;;
+esac
+
+if ! echo "$branch" | grep -Eq '^((feature|bugfix|hotfix)/IT2627T05-[0-9]+(-[A-Za-z0-9_-]+)?|release/[0-9A-Za-z._-]+)$'; then
+  echo ""
+  echo "REJECTED: branch name '$branch' does not follow the Gitflow convention."
+  echo "Allowed:   feature/IT2627T05-XX, bugfix/IT2627T05-XX, hotfix/IT2627T05-XX, release/x.y.z"
+  echo "Rename it: git branch -m feature/IT2627T05-XX"
+  echo ""
+  exit 1
+fi
+
+exit 0

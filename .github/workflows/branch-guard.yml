@@ -1,0 +1,54 @@
+name: Branch guard
+
+# Detects changes on main/develop that did not come in through an approved PR.
+# The rulesets (scripts/001_setup_github.sh) already block such pushes on GitHub.
+# This workflow is a safety net: if something gets through anyway (e.g. a ruleset
+# was disabled), the run turns red and an issue is created so the team sees it.
+
+on:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  via-pull-request:
+    name: Did this change come through an approved PR?
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          PUSHER: ${{ github.actor }}
+        run: |
+          pr=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+            --jq "[.[] | select(.merged_at != null and .base.ref == \"$BRANCH\")][0].number // empty")
+
+          reason=""
+          if [ -z "$pr" ]; then
+            reason="The change was pushed directly, without a Pull Request."
+          else
+            author=$(gh api "repos/$REPO/pulls/$pr" --jq '.user.login')
+            approvals=$(gh api "repos/$REPO/pulls/$pr/reviews" --paginate \
+              --jq "[.[] | select(.state == \"APPROVED\" and .user.login != \"$author\")] | length")
+            if [ "$approvals" -lt 1 ]; then
+              reason="PR #$pr was merged without approval from another team member."
+            fi
+          fi
+
+          if [ -n "$reason" ]; then
+            gh issue create --repo "$REPO" \
+              --title "Gitflow violation on $BRANCH (${SHA:0:7})" \
+              --body "$(printf '%s\n\n- Branch: `%s`\n- Commit: %s\n- Pushed by: @%s\n\nThis breaks the Definition of Done (item 4). Discuss it with the team and fix it through a PR.' \
+                "$reason" "$BRANCH" "$SHA" "$PUSHER")"
+            echo "::error::$reason"
+            exit 1
+          fi
+
+          echo "OK: came in through approved PR #$pr."
