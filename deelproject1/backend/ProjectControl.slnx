@@ -6,6 +6,7 @@
   <Project Path="ProjectControl.AppLogic/ProjectControl.AppLogic.csproj" />
   <Project Path="ProjectControl.Domain.Tests/ProjectControl.Domain.Tests.csproj" />
   <Project Path="ProjectControl.Domain/ProjectControl.Domain.csproj" />
+  <Project Path="ProjectControl.Infrastructure.Tests/ProjectControl.Infrastructure.Tests.csproj" />
   <Project Path="ProjectControl.Infrastructure/ProjectControl.Infrastructure.csproj" />
   <Project Path="ProjectControl.ServiceDefaults/ProjectControl.ServiceDefaults.csproj" />
 </Solution>
