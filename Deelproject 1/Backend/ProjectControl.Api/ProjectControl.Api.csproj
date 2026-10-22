@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ProjectControl.AppLogic\ProjectControl.AppLogic.csproj" />
     <ProjectReference Include="..\ProjectControl.Infrastructure\ProjectControl.Infrastructure.csproj" />
+    <ProjectReference Include="..\ProjectControl.ServiceDefaults\ProjectControl.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

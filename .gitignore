@@ -99,3 +99,10 @@ x86/
 
 # Built Visual Studio Code Extensions
 *.vsix
+# Local secrets
+.env
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+
+# agents
+.claude

@@ -4,6 +4,8 @@ using ProjectControl.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
@@ -28,5 +30,6 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapDefaultEndpoints();
 
 app.Run();
