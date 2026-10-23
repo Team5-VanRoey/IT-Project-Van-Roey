@@ -15,10 +15,10 @@ Every long-lived branch belongs to one environment. Code only moves forward thro
 
 | Environment | Branch | Deployed | By |
 |---|---|---|---|
-| **D**evelopment | `feature/*`, `bugfix/*` | not deployed: your own computer + CI on the PR | – |
-| **T**est | `develop` | automatically after every merge | `CD` workflow |
-| **A**cceptance | `release/x.y.z` | automatically after every push | `CD` workflow |
-| **P**roduction | `main` | after a merge, **only after manual approval** | `CD` workflow |
+| **D**evelopment | `feature/*`, `bugfix/*` | your own computer (`sh scripts/012_deploy.sh dev`) + CI on every PR | you |
+| **T**est | `develop` | automatically after every merge, once CI is green | `CD Test` workflow |
+| **A**cceptance | `release/x.y.z` | automatically after every push, once CI is green | `CD Acceptance` workflow |
+| **P**roduction | `main` | after a merge, **only after manual approval** | `CD Production` workflow |
 
 `hotfix/*` is never deployed on its own: it reaches production through its PR to `main`. See `docs/CI_CD.md`.
 
@@ -53,15 +53,28 @@ GitHub runs the same checks automatically on every PR.
 | `004_check_pr.sh` | Optional | Everyone | Before opening a PR, if you want to know in advance | Checks your branch, commits and PR description (GitHub does the same automatically) |
 | `005_scan_secrets.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Scans the full Git history for secrets (GitHub does the same automatically on every PR) |
 | `006_open_pr.sh` | Optional | Everyone | Only if you prefer the terminal over the website | Runs 005 and 004, pushes the branch, opens the PR and waits for the GitHub checks |
-| `007_setup_sonarcloud.sh` | Once, admin only | Admin | Once (already done) | SonarCloud project, quality gate (coverage ≥ 80%), `SONAR_TOKEN` secret |
-| `008_setup_environments.sh` | Once, admin only | Admin | Once (already done) | DTAP environments `test`, `acceptance`, `production` on GitHub |
-| `009_build_test.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Build + tests + coverage ≥ 80% (same as the *Build & test* check) |
-| `010_deploy.sh` | – | GitHub | Automatically, by the `CD` workflow | Builds the Docker image and deploys it to test, acceptance or production |
+| `007_setup_sonarqube.sh` | Once, admin only | Admin | Once | SonarQube projects (main branch `develop`), quality gate (*Sonar way* on the Free plan, *VanRoey way* prepared), `SONAR_TOKEN` secret |
+| `008_setup_environments.sh` | Once, admin only | Admin | Once | GitHub environments `test`, `acceptance`, `production` (approval) with their secrets |
+| `009_build_test.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Build + lint + tests + coverage ≥ 80% (same as the *Build & test* check) |
+| `010_scan_dependencies.sh` | Optional | Everyone | After adding or updating a package | Vulnerable NuGet/npm packages (same as the *Dependency scan* check) |
+| `011_sonar_scan.sh` | Optional | Everyone | When you want the Quality Gate before the PR | SonarQube analysis + Quality Gate (same as the *SonarQube quality gate* check) |
+| `012_deploy.sh` | Optional | Everyone / GitHub | `dev`: run the app locally; `test`/`acc`/`prod`: by the CD workflows | Deploys one DTAP environment with Docker Compose and runs the smoke test |
+| `013_smoke_test.sh` | – | `012`, `016` | After every deployment | Checks frontend, `/health` and `/api/projects` |
+| `014_images.sh` | Optional | Everyone / CI | `build` before changing a Dockerfile | Build once: versions images by their source, builds/scans/pushes only new versions, resolves digests for the CD |
+| `015_setup_azure.sh` | Once per environment, admin only | Admin | When an environment moves to Azure | Azure Container Apps + free Azure SQL + OIDC deploy identity ([`AZURE.md`](AZURE.md)) |
+| `016_deploy_azure.sh` | – | CD | Automatically, when `DEPLOY_TARGET=azure` | Deploys to Azure Container Apps, smoke test, rollback |
+| `018_check_approved_merge.sh` | – | CD | Before every deployment to test and production | Only commits merged through a PR approved by another team member are deployed |
+| `019_backup.sh` | – | Backup workflow / admin | Nightly, and by hand before risky migrations | Verified, encrypted database backup, copied off the server ([`DISASTER_RECOVERY.md`](DISASTER_RECOVERY.md)) |
+| `020_restore.sh` | – | Restore workflow | During an incident | Restore a backup (or Azure point-in-time), with safety backup and smoke test |
+| `021_dr_test.sh` | Optional | DR test workflow | Monthly, and after changing 019/020 | Restores the latest backup in a throw-away environment and runs the smoke test |
+| `017_setup_azure_devops.sh` | Once, admin only | Admin | Only when moving to Azure DevOps | Variable group, pipelines, environments, branch policies |
+| `ado_check_pr.sh` | – | Azure Pipelines | Every PR in Azure Repos | The Gitflow & PR template check for Azure DevOps |
 
 Forgot to run `002`? Nothing can go wrong on `main` or `develop`: the rulesets on GitHub still block it.
 The hooks only give you faster feedback on your own computer.
 
-`003`, `004` and `006` need Python 3. `001` and `006` need the GitHub CLI (`gh auth login`).
+`003`, `004`, `006`, `007`, `009` and `010` need Python 3. `001`, `006`, `007` and `008` need the GitHub CLI (`gh auth login`).
+`009`–`011` need the .NET 10 SDK and Node.js 22; `012` needs Docker with Compose v2. Details: [`CI_CD.md`](CI_CD.md).
 `005` uses gitleaks when installed, otherwise Docker, otherwise a basic pattern search.
 
 ## PR templates
@@ -160,9 +173,11 @@ When `develop` contains a version that is ready to deliver (e.g. end of a sprint
 4. Only merge when **all checks are green** and **a team member approved** the PR:
    - *Gitflow & PR template*
    - *Secret scan*
-   - *Build & test* (build, tests, coverage ≥ 80%)
-   - *SonarCloud quality gate*
+   - *Build & test* (build, lint, tests, coverage ≥ 80%)
+   - *SonarQube quality gate*
    - *Dependency scan* (no HIGH/CRITICAL vulnerabilities in dependencies)
+   - *Docker build & scan* (images build, compose files valid, no HIGH/CRITICAL in the images)
+   - the branch is up to date with its target (update it with **Update branch** on the PR)
    - the approval is enforced by the ruleset: without it, GitHub shows "Review required" and blocks the merge.
 5. Do **not** click "Delete branch" after merging.
 6. As the very last step, log your time on the Jira ticket.
@@ -175,7 +190,7 @@ The repository is public, so GitHub enforces the rules itself. There are three l
    - merging only through a PR with at least 1 approval from another team member;
    - new commits after an approval require a new approval;
    - all review conversations must be resolved;
-   - the checks **Gitflow & PR template**, **Secret scan**, **Build & test**, **SonarCloud quality gate** and **Dependency scan** must pass;
+   - the checks **Gitflow & PR template**, **Secret scan**, **Build & test**, **SonarQube quality gate**, **Dependency scan** and **Docker build & scan** must pass, on a branch that is up to date with its target;
    - `feature/**`, `bugfix/**`, `hotfix/**` and `release/**` cannot be deleted;
    - only branches named `main`, `develop`, `feature/IT2627T05-*`, `bugfix/IT2627T05-*`, `hotfix/IT2627T05-*` or `release/*` can be created.
 2. **Local hooks** – give feedback already on `git commit` and `git push`, before GitHub rejects anything.
@@ -211,10 +226,20 @@ If the repository is ever made private on GitHub Free, the script still runs but
 | `.githooks/` | Local Git hooks |
 | `.github/pull_request_template.md` | Default PR template (feature) |
 | `.github/PULL_REQUEST_TEMPLATE/` | PR templates for bugfix, hotfix and release |
-| `.github/workflows/ci.yml` | Build & test, SonarCloud quality gate, Dependency scan (required checks) |
-| `.github/workflows/cd.yml` | DTAP deployment: develop → test, release/* → acceptance, main → production |
-| `.github/dependabot.yml` | Weekly dependency updates |
-| `sonar-project.properties` | SonarCloud configuration (generated by `007`) |
+| `.github/workflows/ci-dev.yml` | CI on every PR: Build & test, SonarQube quality gate, Dependency scan, Docker build & scan (required checks) |
+| `.github/workflows/cd-test.yml` | Deploys `develop` to **test** after every merge (when CI is green) |
+| `.github/workflows/cd-acceptance.yml` | Deploys `release/*` to **acceptance** |
+| `.github/workflows/cd-production.yml` | Deploys `main` to **production** after manual approval |
+| `.github/workflows/_deploy.yml` | Reusable: resolve the images CI built, scan them again, deploy, smoke test (never builds) |
+| `.github/workflows/backup.yml`, `restore.yml`, `dr-test.yml` | Disaster recovery: nightly backups, restore (with approval), monthly restore test |
+| `docs/DISASTER_RECOVERY.md` | RPO/RTO per environment and runbooks |
+| `.github/workflows/redeploy.yml` | Manual rollback / re-deploy of a version that was already built |
+| `deploy/compose.yml`, `deploy/compose.<dev\|test\|acc\|prod>.yml` | Docker Compose base + one file per DTAP environment |
+| `deploy/env/*.env.example` | Settings per environment (the real `.env` files are ignored by Git) |
+| `deploy/compose.sonarqube.yml` | Local SonarQube server |
+| `deelproject1/frontend/Dockerfile`, `nginx/default.conf.template` | Frontend image (nginx, proxies `/api` to `API_UPSTREAM`) |
+| `azure-pipelines/` | The same CI/CD for Azure DevOps (ready, not used while on GitHub) |
+| `deelproject1/frontend/sonar-project.properties` | SonarQube settings for the frontend |
 | `.github/workflows/pr-checks.yml` | Sets the PR template per branch type and checks every PR (branch name, target, commits, PR template) |
 | `.github/workflows/secret-scan.yml` | Scans the full history for secrets with gitleaks (required check) |
 | `.github/workflows/branch-guard.yml` | Detects changes on `main`/`develop` without an approved PR |
@@ -224,10 +249,16 @@ If the repository is ever made private on GitHub Free, the script still runs but
 | `scripts/004_check_pr.sh` | Check your branch and PR description locally |
 | `scripts/005_scan_secrets.sh` | Scan for secrets locally |
 | `scripts/006_open_pr.sh` | Run all checks and open the PR |
-| `scripts/007_setup_sonarcloud.sh` | SonarCloud project and quality gate |
+| `scripts/007_setup_sonarqube.sh` | SonarQube projects and quality gate |
 | `scripts/008_setup_environments.sh` | DTAP environments on GitHub |
 | `scripts/009_build_test.sh` | Build, tests and coverage check |
-| `scripts/010_deploy.sh` | Deployment, used by the `CD` workflow |
+| `scripts/010_scan_dependencies.sh` | Dependency vulnerability scan |
+| `scripts/011_sonar_scan.sh` | SonarQube analysis + Quality Gate |
+| `scripts/012_deploy.sh` | DTAP deployment with Docker Compose |
+| `scripts/013_smoke_test.sh` | Smoke test after a deployment |
+| `scripts/coverage_check.py` | Merges the .NET coverage reports and checks the 80% minimum |
+| `scripts/014_images.sh` … `017_setup_azure_devops.sh`, `ado_check_pr.sh` | Images, Azure and Azure DevOps (see the scripts table) |
+| `docs/AZURE.md` | Azure hosting, costs and the move to Azure DevOps |
 | `scripts/pr_template.sh` | Picks the PR template per branch type, shared by `004`, `006` and *PR checks* |
 | `scripts/check_pr.py` | The check logic, shared by GitHub and `004_check_pr.sh` |
 | `docs/GITFLOW.md` | This guide |
