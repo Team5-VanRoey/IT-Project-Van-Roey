@@ -1,0 +1,29 @@
+.dashboard-content .projects-error {
+  color: var(--status-red);
+}
+
+.projects-table {
+  margin-top: 24px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  background-color: var(--surface-raised);
+}
+
+.projects-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.projects-table th,
+.projects-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.projects-table th {
+  color: var(--text-secondary);
+  font-weight: 600;
+}

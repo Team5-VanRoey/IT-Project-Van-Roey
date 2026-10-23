@@ -17,6 +17,8 @@ builder.Services.AddDbContext<ProjectControlDbContext>(options =>
 
 builder.Services.AddScoped<IProjectRepository, EfProjectRepository>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<IProjectListSnapshotRepository, EfProjectListSnapshotRepository>();
+builder.Services.AddScoped<ProjectListService>();
 
 var app = builder.Build();
 

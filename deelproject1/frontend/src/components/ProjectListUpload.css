@@ -1,0 +1,74 @@
+.project-upload {
+  max-width: 720px;
+  margin-top: 32px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  background-color: var(--surface-raised);
+}
+
+.project-upload h2 {
+  font-size: 16px;
+}
+
+.project-upload form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.project-upload label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.project-upload button {
+  padding: 10px 16px;
+  border: none;
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.project-upload button:hover:enabled {
+  background-color: var(--color-primary-hover);
+}
+
+.project-upload button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-upload .project-upload-error {
+  color: var(--status-red);
+}
+
+.project-upload-success {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--status-green);
+  background-color: var(--surface-page);
+}
+
+.project-upload .project-upload-success p {
+  margin-top: 0;
+  color: var(--status-green);
+}
+
+.project-upload-warnings {
+  margin-top: 12px;
+  padding-left: 20px;
+  color: var(--status-orange);
+  font-size: 13px;
+}
+
+.project-upload-success button {
+  margin-top: 12px;
+}

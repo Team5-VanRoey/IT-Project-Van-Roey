@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { msal, resetMsal } from './test/msal'
-import App from './App'
-import { loginRequest } from './auth/authConfig'
+import { msal, resetMsal } from './msal'
+import App from '../src/App'
+import { loginRequest } from '../src/auth/authConfig'
 
 describe('App', () => {
   beforeEach(resetMsal)

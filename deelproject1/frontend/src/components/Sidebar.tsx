@@ -17,12 +17,13 @@ function Icon({ path }: { path: string }) {
 }
 
 type SidebarProps = {
+  activeItem: string
+  onSelect: (item: string) => void
   onLogout: () => void
 }
 
-function Sidebar({ onLogout }: SidebarProps) {
+function Sidebar({ activeItem, onSelect, onLogout }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [activeItem, setActiveItem] = useState('Dashboard')
 
   return (
     <nav className={isCollapsed ? 'sidebar collapsed' : 'sidebar'}>
@@ -41,7 +42,7 @@ function Sidebar({ onLogout }: SidebarProps) {
               type="button"
               className={item.name === activeItem ? 'sidebar-item active' : 'sidebar-item'}
               title={isCollapsed ? item.name : undefined}
-              onClick={() => setActiveItem(item.name)}
+              onClick={() => onSelect(item.name)}
             >
               <Icon path={item.icon} />
               {!isCollapsed && <span>{item.name}</span>}

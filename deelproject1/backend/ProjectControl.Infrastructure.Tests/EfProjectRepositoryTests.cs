@@ -81,6 +81,34 @@ public class EfProjectRepositoryTests : IDisposable
         Assert.Null(found);
     }
 
+    [Fact]
+    public async Task SnapshotRepository_SavesSnapshotWithProjects_NewestFirst()
+    {
+        var older = new ProjectListSnapshot(Guid.NewGuid(), new DateTime(2026, 10, 1), "oud.xlsx");
+        var newer = new ProjectListSnapshot(Guid.NewGuid(), new DateTime(2026, 10, 20), "nieuw.xlsx");
+        newer.Projects.Add(new SnapshotProject(Guid.NewGuid(), "Klant A", new DateOnly(2026, 12, 1)));
+        newer.Projects.Add(new SnapshotProject(Guid.NewGuid(), "Klant B", null));
+        newer.Projects[0].Columns["PM"] = "Els";
+
+        using (var context = new ProjectControlDbContext(_options))
+        {
+            var repository = new EfProjectListSnapshotRepository(context);
+            await repository.AddAsync(older);
+            await repository.AddAsync(newer);
+        }
+
+        using (var context = new ProjectControlDbContext(_options))
+        {
+            var snapshots = await new EfProjectListSnapshotRepository(context).GetAllAsync();
+
+            Assert.Equal(["nieuw.xlsx", "oud.xlsx"], snapshots.Select(s => s.FileName));
+            Assert.Equal(DateTimeKind.Utc, snapshots[0].UploadedAt.Kind);
+            Assert.Equal(2, snapshots[0].Projects.Count);
+            Assert.Contains(snapshots[0].Projects, p => p.CustomerName == "Klant B" && p.GoLiveDate == null);
+            Assert.Contains(snapshots[0].Projects, p => p.CustomerName == "Klant A" && p.Columns["PM"] == "Els");
+        }
+    }
+
     private static Project CreateProject(string name)
     {
         var milestones = new List<Milestone>

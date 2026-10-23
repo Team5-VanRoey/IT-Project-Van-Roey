@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { InteractionRequiredAuthError } from '@azure/msal-browser'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { msal, resetMsal } from '../test/msal'
-import EntraTestPanel from './EntraTestPanel'
+import { msal, resetMsal } from '../msal'
+import EntraTestPanel from '../../src/components/EntraTestPanel'
 
 const account = { name: 'Test User', username: 'test@vanroey.be' }
 
