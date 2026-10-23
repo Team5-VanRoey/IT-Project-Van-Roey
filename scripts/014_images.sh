@@ -111,7 +111,7 @@ tag_alias() {  # tag_alias <alias>
   for c in api web; do
     component "$c"
     ref="$repo@$(digest "$repo:$tag")"
-    docker buildx imagetools create -t "$repo:$1" "$ref" >/dev/null || { echo "FAILED: tag $repo:$1" >&2; return 1; }
+    docker buildx imagetools create --prefer-index=false -t "$repo:$1" "$ref" >/dev/null || { echo "FAILED: tag $repo:$1" >&2; return 1; }
     echo "== $c: $repo:$1 -> $tag (no rebuild)"
   done
 }
