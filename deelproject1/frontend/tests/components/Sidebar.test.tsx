@@ -1,24 +1,25 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import Sidebar from './Sidebar'
+import Sidebar from '../../src/components/Sidebar'
 
 describe('Sidebar', () => {
-  it('marks Dashboard as active by default and switches the active item', async () => {
+  it('marks the active item and reports a selection', async () => {
+    const onSelect = vi.fn()
     const user = userEvent.setup()
-    render(<Sidebar onLogout={vi.fn()} />)
+    render(<Sidebar activeItem="Dashboard" onSelect={onSelect} onLogout={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveClass('active')
+    expect(screen.getByRole('button', { name: 'Projecten' })).not.toHaveClass('active')
 
     await user.click(screen.getByRole('button', { name: 'Projecten' }))
 
-    expect(screen.getByRole('button', { name: 'Projecten' })).toHaveClass('active')
-    expect(screen.getByRole('button', { name: 'Dashboard' })).not.toHaveClass('active')
+    expect(onSelect).toHaveBeenCalledWith('Projecten')
   })
 
   it('collapses and expands the menu', async () => {
     const user = userEvent.setup()
-    const { container } = render(<Sidebar onLogout={vi.fn()} />)
+    const { container } = render(<Sidebar activeItem="Dashboard" onSelect={vi.fn()} onLogout={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Inklappen' }))
 
@@ -36,7 +37,7 @@ describe('Sidebar', () => {
   it('calls onLogout', async () => {
     const onLogout = vi.fn()
     const user = userEvent.setup()
-    render(<Sidebar onLogout={onLogout} />)
+    render(<Sidebar activeItem="Dashboard" onSelect={vi.fn()} onLogout={onLogout} />)
 
     await user.click(screen.getByRole('button', { name: 'Afmelden' }))
 

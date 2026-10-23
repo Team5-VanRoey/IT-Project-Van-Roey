@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loginRequest, msalConfig } from './authConfig'
+import { loginRequest, msalConfig } from '../../src/auth/authConfig'
 
 describe('authConfig', () => {
   it('uses this site as redirect URI and keeps tokens in sessionStorage', () => {

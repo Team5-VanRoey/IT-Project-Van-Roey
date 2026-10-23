@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import EntraTestPanel from '../components/EntraTestPanel'
+import ProjectListUpload from '../components/ProjectListUpload'
 import Sidebar from '../components/Sidebar'
+import ProjectsPage from './ProjectsPage'
 import './DashboardPage.css'
 
 type DashboardPageProps = {
@@ -7,15 +10,25 @@ type DashboardPageProps = {
 }
 
 function DashboardPage({ onLogout }: DashboardPageProps) {
+  const [activePage, setActivePage] = useState('Dashboard')
+
   return (
     <div className="dashboard-page">
-      <Sidebar onLogout={onLogout} />
+      <Sidebar activeItem={activePage} onSelect={setActivePage} onLogout={onLogout} />
 
       <main className="dashboard-content">
-        <h1>Dashboard</h1>
-        <p>Hier komt het overzicht van je projecten.</p>
+        {activePage === 'Projecten' ? (
+          <ProjectsPage />
+        ) : (
+          <>
+            <h1>Dashboard</h1>
+            <p>Hier komt het overzicht van je projecten.</p>
 
-        {import.meta.env.DEV && <EntraTestPanel />}
+            <ProjectListUpload onShowProjects={() => setActivePage('Projecten')} />
+
+            {import.meta.env.DEV && <EntraTestPanel />}
+          </>
+        )}
       </main>
     </div>
   )

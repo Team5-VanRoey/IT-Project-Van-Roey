@@ -84,7 +84,7 @@ git checkout -b feature/IT2627T05-116-demo-fail
 
 | Test | Change on the test branch | Expected on the PR |
 |---|---|---|
-| B2a – failing test | in `deelproject1/frontend/src/App.test.tsx`: change `'Aanmelden'` in the first test to `'Fout'` | *Build & test* red |
+| B2a – failing test | in `deelproject1/frontend/tests/App.test.tsx`: change `'Aanmelden'` in the first test to `'Fout'` | *Build & test* red |
 | B2b – no approval | (all checks green, no review yet) | *Merge* button disabled: "Review required" |
 | B2c – template not filled in | empty the PR description | *Gitflow & PR template* red |
 

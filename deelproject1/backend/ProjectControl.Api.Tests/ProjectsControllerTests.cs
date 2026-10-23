@@ -23,7 +23,7 @@ public class ProjectsControllerTests
         var result = await _controller.GetAll();
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var projects = Assert.IsAssignableFrom<IReadOnlyList<Project>>(ok.Value);
+        var projects = Assert.IsType<IReadOnlyList<Project>>(ok.Value, exactMatch: false);
         Assert.Single(projects);
     }
 

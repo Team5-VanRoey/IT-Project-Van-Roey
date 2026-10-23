@@ -74,6 +74,51 @@ namespace ProjectControl.Infrastructure.Migrations
                     b.ToTable("Projects");
                 });
 
+            modelBuilder.Entity("ProjectControl.Domain.ProjectListSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProjectListSnapshots");
+                });
+
+            modelBuilder.Entity("ProjectControl.Domain.SnapshotProject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Columns")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateOnly?>("GoLiveDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ProjectListSnapshotId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectListSnapshotId");
+
+                    b.ToTable("SnapshotProjects", (string)null);
+                });
+
             modelBuilder.Entity("ProjectControl.Domain.Milestone", b =>
                 {
                     b.HasOne("ProjectControl.Domain.Project", null)
@@ -83,9 +128,23 @@ namespace ProjectControl.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ProjectControl.Domain.SnapshotProject", b =>
+                {
+                    b.HasOne("ProjectControl.Domain.ProjectListSnapshot", null)
+                        .WithMany("Projects")
+                        .HasForeignKey("ProjectListSnapshotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ProjectControl.Domain.Project", b =>
                 {
                     b.Navigation("Milestones");
+                });
+
+            modelBuilder.Entity("ProjectControl.Domain.ProjectListSnapshot", b =>
+                {
+                    b.Navigation("Projects");
                 });
 #pragma warning restore 612, 618
         }
