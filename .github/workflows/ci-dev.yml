@@ -5,12 +5,13 @@
 # release/* and main. The CD workflows (cd-*.yml) only deploy a commit for which this run is
 # green, and they never build: they deploy the images this workflow built.
 #
-# The four jobs are REQUIRED status checks in the ruleset "Protect main and develop"
+# These jobs are REQUIRED status checks in the ruleset "Protect main and develop"
 # (scripts/001_setup_github.sh): a PR can only be merged when all of them pass.
 # Do not rename the jobs' names without updating the ruleset.
 #
 #   Build & test             scripts/009_build_test.sh          quality rules Q1, Q2
-#   SonarQube quality gate   scripts/011_sonar_scan.sh          quality rule  Q3
+#   SonarQube backend (C#)   scripts/011_sonar_scan.sh backend  quality rule  Q3
+#   SonarQube frontend (React) scripts/011_sonar_scan.sh frontend quality rule Q3
 #   Dependency scan          scripts/010_scan_dependencies.sh   security rule S2
 #   Docker build & scan      scripts/014_images.sh ensure       security rule S4
 #
@@ -83,10 +84,21 @@ jobs:
           if-no-files-found: ignore
 
   sonarqube:
-    name: SonarQube quality gate
+    # Two checks with their own name, one per SonarQube project:
+    #   "SonarQube backend (C#)"     -> project Team5-VanRoey_IT-Project-Van-Roey
+    #   "SonarQube frontend (React)" -> project Team5-VanRoey_IT-Project-Van-Roey_frontend
+    name: SonarQube ${{ matrix.part }} (${{ matrix.label }})
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: backend
+            label: 'C#'
+          - part: frontend
+            label: React
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
@@ -106,6 +118,7 @@ jobs:
           fi
 
       - uses: actions/setup-dotnet@v6
+        if: matrix.part == 'backend'
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -115,6 +128,7 @@ jobs:
           java-version: '21'
 
       - uses: actions/setup-node@v7
+        if: matrix.part == 'frontend'
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -124,10 +138,12 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.sonar/cache
-          key: sonar-${{ runner.os }}
+          key: sonar-${{ runner.os }}-${{ matrix.part }}
 
-      - name: Analyse and wait for the Quality Gate
-        run: sh scripts/011_sonar_scan.sh
+      - name: Analyse ${{ matrix.part }} and wait for the Quality Gate
+        env:
+          PART: ${{ matrix.part }}
+        run: sh scripts/011_sonar_scan.sh "$PART"
 
   dependency-scan:
     name: Dependency scan

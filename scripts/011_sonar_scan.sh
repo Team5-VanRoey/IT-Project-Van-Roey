@@ -1,6 +1,6 @@
 #!/bin/sh
 # SonarQube analysis + Quality Gate (quality rule Q3, docs/QUALITY_AND_SECURITY.md).
-# Same analysis as the required check "SonarQube quality gate" in GitHub Actions
+# Same analysis as the required checks "SonarQube backend (C#)" and "SonarQube frontend (React)" in GitHub Actions
 # (.github/workflows/ci-dev.yml) and Azure DevOps (azure-pipelines/ci.yml).
 #
 # Two SonarQube projects, because C# can only be analysed by the SonarScanner for .NET:

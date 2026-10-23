@@ -175,4 +175,4 @@ fi
 
 echo ""
 echo "Done. Check the gate in SonarQube: $host -> Quality Gates."
-echo "Next: sh scripts/001_setup_github.sh (makes 'SonarQube quality gate' a required check)."
+echo "Next: sh scripts/001_setup_github.sh (makes 'SonarQube backend (C#)' and 'SonarQube frontend (React)' required checks)."

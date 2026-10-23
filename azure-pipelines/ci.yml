@@ -6,7 +6,7 @@
 #   Gitflow & PR template    scripts/ado_check_pr.sh -> scripts/check_pr.py   (Azure Repos PRs)
 #   Secret scan              scripts/005_scan_secrets.sh                      S1
 #   Build & test             scripts/009_build_test.sh                        Q1, Q2
-#   SonarQube quality gate   scripts/011_sonar_scan.sh                        Q3
+#   SonarQube backend (C#) / SonarQube frontend (React)  scripts/011_sonar_scan.sh  Q3
 #   Dependency scan          scripts/010_scan_dependencies.sh                 S2
 #   Docker build & scan      scripts/014_images.sh ensure (build once)        S4
 #
@@ -98,16 +98,29 @@ jobs:
             deelproject1/backend/TestResults/**/coverage.cobertura.xml
             deelproject1/frontend/coverage/cobertura-coverage.xml
 
-  - job: sonarqube
-    displayName: SonarQube quality gate
+  - job: sonarqube_backend
+    displayName: SonarQube backend (C#)
     condition: ne(variables['Build.Reason'], 'Schedule')
     timeoutInMinutes: 25
     steps:
       - checkout: self
         fetchDepth: 0   # SonarQube needs the history to determine "new code"
       - template: templates/setup-tools.yml
-      - script: sh scripts/011_sonar_scan.sh
-        displayName: Analyse and wait for the Quality Gate
+      - script: sh scripts/011_sonar_scan.sh backend
+        displayName: Analyse backend and wait for the Quality Gate
+        env:
+          SONAR_TOKEN: $(SONAR_TOKEN)   # secrets must be mapped explicitly
+
+  - job: sonarqube_frontend
+    displayName: SonarQube frontend (React)
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    timeoutInMinutes: 25
+    steps:
+      - checkout: self
+        fetchDepth: 0   # SonarQube needs the history to determine "new code"
+      - template: templates/setup-tools.yml
+      - script: sh scripts/011_sonar_scan.sh frontend
+        displayName: Analyse frontend and wait for the Quality Gate
         env:
           SONAR_TOKEN: $(SONAR_TOKEN)   # secrets must be mapped explicitly
 

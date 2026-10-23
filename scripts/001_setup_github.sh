@@ -120,7 +120,8 @@ cat > "$tmp/main-develop.json" <<'EOF'
           { "context": "Gitflow & PR template" },
           { "context": "Secret scan" },
           { "context": "Build & test" },
-          { "context": "SonarQube quality gate" },
+          { "context": "SonarQube backend (C#)" },
+          { "context": "SonarQube frontend (React)" },
           { "context": "Dependency scan" },
           { "context": "Docker build & scan" }
         ]

@@ -57,7 +57,7 @@ GitHub runs the same checks automatically on every PR.
 | `008_setup_environments.sh` | Once, admin only | Admin | Once | GitHub environments `test`, `acceptance`, `production` (approval) with their secrets |
 | `009_build_test.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Build + lint + tests + coverage ≥ 80% (same as the *Build & test* check) |
 | `010_scan_dependencies.sh` | Optional | Everyone | After adding or updating a package | Vulnerable NuGet/npm packages (same as the *Dependency scan* check) |
-| `011_sonar_scan.sh` | Optional | Everyone | When you want the Quality Gate before the PR | SonarQube analysis + Quality Gate (same as the *SonarQube quality gate* check) |
+| `011_sonar_scan.sh` | Optional | Everyone | When you want the Quality Gate before the PR | SonarQube analysis + Quality Gate (same as the *SonarQube backend (C#)* and *SonarQube frontend (React)* checks) |
 | `012_deploy.sh` | Optional | Everyone / GitHub | `dev`: run the app locally; `test`/`acc`/`prod`: by the CD workflows | Deploys one DTAP environment with Docker Compose and runs the smoke test |
 | `013_smoke_test.sh` | – | `012`, `016` | After every deployment | Checks frontend, `/health` and `/api/projects` |
 | `014_images.sh` | Optional | Everyone / CI | `build` before changing a Dockerfile | Build once: versions images by their source, builds/scans/pushes only new versions, resolves digests for the CD |
@@ -174,7 +174,7 @@ When `develop` contains a version that is ready to deliver (e.g. end of a sprint
    - *Gitflow & PR template*
    - *Secret scan*
    - *Build & test* (build, lint, tests, coverage ≥ 80%)
-   - *SonarQube quality gate*
+   - *SonarQube backend (C#)* and *SonarQube frontend (React)*
    - *Dependency scan* (no HIGH/CRITICAL vulnerabilities in dependencies)
    - *Docker build & scan* (images build, compose files valid, no HIGH/CRITICAL in the images)
    - the branch is up to date with its target (update it with **Update branch** on the PR)
@@ -190,7 +190,7 @@ The repository is public, so GitHub enforces the rules itself. There are three l
    - merging only through a PR with at least 1 approval from another team member;
    - new commits after an approval require a new approval;
    - all review conversations must be resolved;
-   - the checks **Gitflow & PR template**, **Secret scan**, **Build & test**, **SonarQube quality gate**, **Dependency scan** and **Docker build & scan** must pass, on a branch that is up to date with its target;
+   - the checks **Gitflow & PR template**, **Secret scan**, **Build & test**, **SonarQube backend (C#)**, **SonarQube frontend (React)**, **Dependency scan** and **Docker build & scan** must pass, on a branch that is up to date with its target;
    - `feature/**`, `bugfix/**`, `hotfix/**` and `release/**` cannot be deleted;
    - only branches named `main`, `develop`, `feature/IT2627T05-*`, `bugfix/IT2627T05-*`, `hotfix/IT2627T05-*` or `release/*` can be created.
 2. **Local hooks** – give feedback already on `git commit` and `git push`, before GitHub rejects anything.
@@ -226,7 +226,7 @@ If the repository is ever made private on GitHub Free, the script still runs but
 | `.githooks/` | Local Git hooks |
 | `.github/pull_request_template.md` | Default PR template (feature) |
 | `.github/PULL_REQUEST_TEMPLATE/` | PR templates for bugfix, hotfix and release |
-| `.github/workflows/ci-dev.yml` | CI on every PR: Build & test, SonarQube quality gate, Dependency scan, Docker build & scan (required checks) |
+| `.github/workflows/ci-dev.yml` | CI on every PR: Build & test, SonarQube backend (C#), SonarQube frontend (React), Dependency scan, Docker build & scan (required checks) |
 | `.github/workflows/cd-test.yml` | Deploys `develop` to **test** after every merge (when CI is green) |
 | `.github/workflows/cd-acceptance.yml` | Deploys `release/*` to **acceptance** |
 | `.github/workflows/cd-production.yml` | Deploys `main` to **production** after manual approval |

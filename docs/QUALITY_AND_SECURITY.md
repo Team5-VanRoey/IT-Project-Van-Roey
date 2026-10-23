@@ -12,15 +12,15 @@ always trace a red check back to the rule behind it. How the checks run is descr
 | Rule | What | Enforced by | Blocks the merge? |
 |---|---|---|---|
 | **Q1** | Build, lint and all tests pass | *Build & test* (`009_build_test.sh`) | yes |
-| **Q2** | Test coverage ≥ **80%** | *Build & test* + SonarQube quality gate | yes |
-| **Q3** | SonarQube Quality Gate green | *SonarQube quality gate* (`011_sonar_scan.sh`) | yes |
+| **Q2** | Test coverage ≥ **80%** | *Build & test* + SonarQube checks | yes |
+| **Q3** | SonarQube Quality Gate green | *SonarQube backend (C#)* + *SonarQube frontend (React)* (`011_sonar_scan.sh`) | yes |
 | **Q4** | Every change has tests; every bugfix a regression test | PR template + review | yes (review) |
 | **Q5** | Review by another team member | Ruleset (1 approval, conversations resolved) | yes |
 | **S1** | No secrets in the repository | pre-commit hook, *Secret scan*, GitHub push protection | yes |
 | **S2** | No HIGH/CRITICAL vulnerable dependencies | *Dependency scan* (`010_scan_dependencies.sh`), on every PR and weekly | yes |
 | **S3** | Secrets only in GitHub environments or ignored `.env` files | `.gitignore`, `deploy/env/*.example`, review | yes (S1 scan) |
 | **S4** | No HIGH/CRITICAL vulnerabilities in container images | *Docker build & scan* + CD (Trivy) | yes / blocks deploy |
-| **S5** | No vulnerabilities in our own code, hotspots reviewed | SonarQube quality gate | yes |
+| **S5** | No vulnerabilities in our own code, hotspots reviewed | SonarQube checks | yes |
 | **S6** | Hardened runtime | Dockerfiles, `deploy/compose*.yml`, `nginx/default.conf.template`, Azure setup | review |
 | **S7** | Production only after approval | GitHub environment `production` | blocks deploy |
 | **S8** | Recoverable data: encrypted backups, tested restores | `backup.yml`, `restore.yml`, `dr-test.yml` | – (monitored) |

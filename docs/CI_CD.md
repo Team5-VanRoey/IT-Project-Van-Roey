@@ -65,7 +65,7 @@ the merge. Four jobs run in parallel; **all four are required checks**, together
 | Check | Script (run it locally too) | What it does | Fails when |
 |---|---|---|---|
 | **Build & test** | `sh scripts/009_build_test.sh` | .NET restore/build (Release) + tests with coverage; frontend `npm ci`, lint, build, vitest with coverage | build/lint error, a failing test, coverage < 80% |
-| **SonarQube quality gate** | `sh scripts/011_sonar_scan.sh` | analyses backend and frontend in SonarQube and waits for the Quality Gate | gate red (see Q3) |
+| **SonarQube backend (C#)** / **SonarQube frontend (React)** | `sh scripts/011_sonar_scan.sh backend` / `frontend` | one check per SonarQube project: analyses that part and waits for its Quality Gate | gate red (see Q3) |
 | **Dependency scan** | `sh scripts/010_scan_dependencies.sh` | NuGet (incl. transitive) and npm audit | HIGH/CRITICAL vulnerability |
 | **Docker build & scan** | `sh scripts/014_images.sh ensure` | validates the 4 DTAP compose files; per image: reuse when this source version exists, otherwise build, Trivy scan and push **once** | build error, invalid compose, HIGH/CRITICAL in image |
 
@@ -92,11 +92,11 @@ workflow `_deploy.yml`:
    published since the build.
 3. **Deploy** – in the GitHub environment (`test` / `acceptance` / `production`), to the target
    in its variable `DEPLOY_TARGET`:
-   - `azure` – `scripts/016_deploy_azure.sh <env>` on Azure Container Apps (login with OIDC),
-     smoke test, **automatic rollback** to the previous images when it fails. Set up by
-     `scripts/015_setup_azure.sh`, see [`AZURE.md`](AZURE.md).
-   - `compose` (default) – `scripts/012_deploy.sh <env> up` pulls the images, starts the
-     containers, waits until they are healthy and runs the smoke test.
+    - `azure` – `scripts/016_deploy_azure.sh <env>` on Azure Container Apps (login with OIDC),
+      smoke test, **automatic rollback** to the previous images when it fails. Set up by
+      `scripts/015_setup_azure.sh`, see [`AZURE.md`](AZURE.md).
+    - `compose` (default) – `scripts/012_deploy.sh <env> up` pulls the images, starts the
+      containers, waits until they are healthy and runs the smoke test.
 
    The smoke test (`013_smoke_test.sh`) checks the frontend, `/health` and `/api/projects`.
    If anything fails, the run is red and shows the logs.
@@ -217,7 +217,7 @@ so a server can pull it.
 | Check | First step |
 |---|---|
 | Build & test | open the log: failing test name or "coverage below 80%" with the file list (lowest % first). Same command locally: `009_build_test.sh` |
-| SonarQube quality gate | open the link in the log → *Pull Request* tab in SonarQube; fix the new issues / add tests |
+| SonarQube backend / frontend | open the link in the log → *Pull Request* tab in SonarQube; fix the new issues / add tests |
 | Dependency scan | update the package mentioned (`dotnet add package X`, `npm update X` / `npm audit fix`) |
 | Docker build & scan | Dockerfile error, or update the base image tag; Trivy lists the package + fixed version |
 | CD: "No images for <sha>" | CI did not build this commit (CI red or still running, or a fork PR): fix CI first |
