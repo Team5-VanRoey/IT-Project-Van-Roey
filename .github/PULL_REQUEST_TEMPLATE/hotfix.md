@@ -25,7 +25,7 @@ IT2627T05-XX
 ## Checklist
 - [ ] Branch `hotfix/IT2627T05-XX` from `main`, every commit starts with `IT2627T05-XX: `
 - [ ] No secrets or personal data in the code or history
-- [ ] Coverage stays at least 80%, no Blocker/Critical SonarCloud issues
+- [ ] Coverage stays at least 80%, SonarQube Quality Gate green
 - [ ] A second PR from this branch to `develop` is opened (or right after merging)
 - [ ] The pipeline passed
 - [ ] Another team member approved this PR

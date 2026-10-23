@@ -1,0 +1,37 @@
+# Manually (re)deploy a version that CI already built - without building anything.
+#   Rollback: choose the environment and an older commit SHA (Actions -> CI history).
+#   Promote:  deploy the commit that runs in acceptance to production (after the merge on main
+#             CI already did this automatically; this is for re-running a deployment).
+#
+# Actions -> Redeploy -> Run workflow. Run it from the branch of that environment
+# (test: develop, acceptance: release/*, production: main): the GitHub environment only accepts
+# deployments from its own branch, and production still needs a reviewer's approval.
+name: Redeploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment
+        required: true
+        type: choice
+        options: [test, acceptance, production]
+      sha:
+        description: Commit SHA whose images to deploy (empty = latest commit of this branch)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: write
+  id-token: write
+
+jobs:
+  redeploy:
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: ${{ inputs.environment }}
+      dtap: ${{ inputs.environment == 'production' && 'prod' || inputs.environment == 'acceptance' && 'acc' || 'test' }}
+      sha: ${{ inputs.sha || github.sha }}
+    secrets: inherit

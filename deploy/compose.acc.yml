@@ -1,0 +1,24 @@
+# A - Acceptance: deployed automatically for every push on 'release/*' (.github/workflows/cd-acceptance.yml).
+# Must behave like production (same settings, hardened containers) so the product owner
+# can accept the release before it goes to main.
+name: projectcontrol-acc
+
+services:
+  api:
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  web:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /etc/nginx/conf.d   # nginx writes its config from the template at startup
+    deploy:
+      resources:
+        limits:
+          memory: 128m

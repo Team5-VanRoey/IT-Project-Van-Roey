@@ -115,13 +115,15 @@ cat > "$tmp/main-develop.json" <<'EOF'
     {
       "type": "required_status_checks",
       "parameters": {
-        "strict_required_status_checks_policy": false,
+        "strict_required_status_checks_policy": true,
         "required_status_checks": [
           { "context": "Gitflow & PR template" },
           { "context": "Secret scan" },
           { "context": "Build & test" },
-          { "context": "SonarCloud quality gate" },
-          { "context": "Dependency scan" }
+          { "context": "SonarQube backend (C#)" },
+          { "context": "SonarQube frontend (React)" },
+          { "context": "Dependency scan" },
+          { "context": "Docker build & scan" }
         ]
       }
     }

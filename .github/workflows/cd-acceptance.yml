@@ -1,0 +1,38 @@
+# A - Acceptance: every push on a release/* branch is deployed automatically,
+# so the product owner can accept the release before it is merged into main.
+#
+# Build once, deploy everywhere: nothing is built here. CI built the images for this commit
+# (or reused them, when the source is unchanged since develop/release), and this workflow
+# deploys exactly those image digests.
+#
+# Starts when the CI workflow finished for a push on 'release/**' (i.e. after a merge) and
+# deploys exactly the commit CI tested, and only when CI was green.
+# Rollback or re-run with another commit: Actions -> Redeploy.
+# Can also be started by hand: Actions -> CD Acceptance -> Run workflow.
+# See docs/CI_CD.md.
+name: CD Acceptance
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: ['release/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: write
+  id-token: write   # OIDC login to Azure (DEPLOY_TARGET=azure)
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: acceptance
+      dtap: acc
+      sha: ${{ github.event.workflow_run.head_sha || github.sha }}
+    secrets: inherit

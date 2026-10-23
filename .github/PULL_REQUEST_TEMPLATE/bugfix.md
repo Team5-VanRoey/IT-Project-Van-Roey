@@ -22,6 +22,6 @@ IT2627T05-XX
 ## Checklist
 - [ ] Branch `bugfix/IT2627T05-XX` targets `develop`, every commit starts with `IT2627T05-XX: `
 - [ ] No secrets or personal data in the code or history
-- [ ] Coverage stays at least 80%, no Blocker/Critical SonarCloud issues
+- [ ] Coverage stays at least 80%, SonarQube Quality Gate green
 - [ ] The pipeline passed
 - [ ] Another team member approved this PR

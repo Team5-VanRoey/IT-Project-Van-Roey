@@ -1,3 +1,7 @@
+# API image. Built ONCE per backend source version by CI (scripts/014_images.sh) and the same
+# image runs in test, acceptance and production: it contains no environment settings.
+# Everything environment-specific comes in at runtime as environment variables
+# (ASPNETCORE_ENVIRONMENT, ConnectionStrings__ProjectControl, ...; see deploy/compose.yml).
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 

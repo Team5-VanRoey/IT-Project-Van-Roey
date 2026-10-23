@@ -1,0 +1,23 @@
+# D - Development: your own computer. The only environment that builds images itself
+# (from your working copy); test, acceptance and production use the images CI built.
+#   sh scripts/012_deploy.sh dev           start (http://localhost:8080)
+#   sh scripts/012_deploy.sh dev down      stop
+name: projectcontrol-dev
+
+services:
+  db:
+    ports:
+      - "1433:1433"        # connect from your IDE / SQL tooling
+
+  api:
+    build:
+      context: ../deelproject1/backend
+      dockerfile: ProjectControl.Api/Dockerfile
+    image: projectcontrol-api:dev
+    ports:
+      - "5244:8080"        # API directly, without the frontend proxy
+
+  web:
+    build:
+      context: ../deelproject1/frontend
+    image: projectcontrol-web:dev

@@ -1,0 +1,22 @@
+# Installs the same tool versions as the GitHub Actions workflows.
+parameters:
+  - name: dotnet
+    type: boolean
+    default: true
+  - name: node
+    type: boolean
+    default: true
+
+steps:
+  - ${{ if eq(parameters.dotnet, true) }}:
+      - task: UseDotNet@2
+        displayName: .NET 10 SDK
+        inputs:
+          packageType: sdk
+          version: 10.0.x
+
+  - ${{ if eq(parameters.node, true) }}:
+      - task: NodeTool@0
+        displayName: Node.js 22
+        inputs:
+          versionSpec: 22.x

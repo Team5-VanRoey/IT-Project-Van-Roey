@@ -1,0 +1,69 @@
+# CD for Azure DevOps - the Azure Pipelines version of the cd-*.yml workflows.
+# Not used while the project runs on GitHub; ready for a move to Azure DevOps (docs/AZURE.md).
+#
+# Build once, deploy everywhere: this pipeline never builds. It deploys the image digests the
+# CI pipeline built for the commit, so every environment runs the same containers.
+#
+# Starts when the CI pipeline 'projectcontrol-ci' finished successfully for a push on
+# develop, release/* or main, and deploys exactly that commit:
+#   develop    -> stage Test         -> Azure environment 'test'        (automatic)
+#   release/*  -> stage Acceptance   -> Azure environment 'acc'         (automatic)
+#   main       -> stage Production   -> Azure environment 'prod'        (after approval)
+#
+# Approvals: the Azure DevOps environment 'projectcontrol-production' has an Approvals check
+# (Pipelines -> Environments -> projectcontrol-production -> Approvals and checks).
+#
+# Service connections (Project settings -> Service connections), see docs/AZURE.md:
+#   azure-projectcontrol-test / -acc / -prod  Azure Resource Manager, workload identity federation,
+#                                             scoped to rg-projectcontrol-<env>
+#   ghcr-projectcontrol                       Docker Registry, ghcr.io (token: write:packages)
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger: none
+pr: none
+
+resources:
+  pipelines:
+    - pipeline: ci
+      source: projectcontrol-ci
+      trigger:
+        branches:
+          include: [develop, main, release/*]
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Test
+    displayName: T - Test
+    dependsOn: []
+    condition: and(succeeded(), ne(variables['resources.pipeline.ci.runReason'], 'Schedule'), eq(variables['resources.pipeline.ci.sourceBranch'], 'refs/heads/develop'))
+    jobs:
+      - template: templates/deploy.yml
+        parameters:
+          dtap: test
+          environment: projectcontrol-test
+          serviceConnection: azure-projectcontrol-test
+
+  - stage: Acceptance
+    displayName: A - Acceptance
+    dependsOn: []
+    condition: and(succeeded(), ne(variables['resources.pipeline.ci.runReason'], 'Schedule'), startsWith(variables['resources.pipeline.ci.sourceBranch'], 'refs/heads/release/'))
+    jobs:
+      - template: templates/deploy.yml
+        parameters:
+          dtap: acc
+          environment: projectcontrol-acceptance
+          serviceConnection: azure-projectcontrol-acc
+
+  - stage: Production
+    displayName: P - Production
+    dependsOn: []
+    condition: and(succeeded(), ne(variables['resources.pipeline.ci.runReason'], 'Schedule'), eq(variables['resources.pipeline.ci.sourceBranch'], 'refs/heads/main'))
+    jobs:
+      - template: templates/deploy.yml
+        parameters:
+          dtap: prod
+          environment: projectcontrol-production
+          serviceConnection: azure-projectcontrol-prod

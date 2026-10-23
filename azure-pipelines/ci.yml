@@ -1,0 +1,161 @@
+# CI for Azure DevOps - the Azure Pipelines version of .github/workflows/ci-dev.yml.
+# Not used while the project runs on GitHub; ready for a move to Azure DevOps (docs/AZURE.md).
+#
+# Every job runs the same script as on GitHub, so the rules (docs/QUALITY_AND_SECURITY.md)
+# stay identical:
+#   Gitflow & PR template    scripts/ado_check_pr.sh -> scripts/check_pr.py   (Azure Repos PRs)
+#   Secret scan              scripts/005_scan_secrets.sh                      S1
+#   Build & test             scripts/009_build_test.sh                        Q1, Q2
+#   SonarQube backend (C#) / SonarQube frontend (React)  scripts/011_sonar_scan.sh  Q3
+#   Dependency scan          scripts/010_scan_dependencies.sh                 S2
+#   Docker build & scan      scripts/014_images.sh ensure (build once)        S4
+#
+# Pull Requests: with Azure Repos this pipeline is started by the branch policy
+# "Build validation" on develop and main (scripts/017_setup_azure_devops.sh), which also blocks
+# the merge until it is green. The 'pr:' section below is only used for GitHub repositories.
+#
+# Variable group 'projectcontrol-ci': SONAR_TOKEN (secret), SONAR_HOST_URL,
+# SONAR_ORGANIZATION, SONAR_PROJECT_KEY.
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include: [develop, main, release/*]
+
+pr:
+  branches:
+    include: [develop, main]
+
+# Weekly dependency scan on develop (no Dependabot; security rule S2)
+schedules:
+  - cron: '17 6 * * 1'
+    displayName: Weekly dependency scan
+    branches:
+      include: [develop]
+    always: true
+
+variables:
+  - group: projectcontrol-ci
+  - name: DOTNET_NOLOGO
+    value: 'true'
+  - name: DOTNET_CLI_TELEMETRY_OPTOUT
+    value: 'true'
+
+pool:
+  vmImage: ubuntu-latest
+
+jobs:
+  - job: gitflow
+    displayName: Gitflow & PR template
+    condition: and(eq(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.Repository.Provider'], 'TfsGit'))
+    steps:
+      - checkout: self
+        fetchDepth: 1
+      - script: sh scripts/ado_check_pr.sh
+        displayName: Branch name, target, commits and PR description
+        env:
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+  - job: secret_scan
+    displayName: Secret scan
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    steps:
+      - checkout: self
+        fetchDepth: 0   # full history
+      - script: sh scripts/005_scan_secrets.sh
+        displayName: gitleaks over the full history
+
+  - job: build_test
+    displayName: Build & test
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    timeoutInMinutes: 20
+    steps:
+      - checkout: self
+        fetchDepth: 1
+      - template: templates/setup-tools.yml
+      - script: sh scripts/009_build_test.sh
+        displayName: Build, test and check coverage >= 80%
+      - task: PublishTestResults@2
+        displayName: Publish test results
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFormat: VSTest
+          testResultsFiles: deelproject1/backend/TestResults/*.trx
+          testRunTitle: Backend
+      - task: PublishTestResults@2
+        displayName: Publish frontend test results
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFormat: JUnit
+          testResultsFiles: deelproject1/frontend/test-results/junit.xml
+          testRunTitle: Frontend
+      - task: PublishCodeCoverageResults@2
+        displayName: Publish coverage
+        condition: succeededOrFailed()
+        inputs:
+          summaryFileLocation: |
+            deelproject1/backend/TestResults/**/coverage.cobertura.xml
+            deelproject1/frontend/coverage/cobertura-coverage.xml
+
+  - job: sonarqube_backend
+    displayName: SonarQube backend (C#)
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    timeoutInMinutes: 25
+    steps:
+      - checkout: self
+        fetchDepth: 0   # SonarQube needs the history to determine "new code"
+      - template: templates/setup-tools.yml
+      - script: sh scripts/011_sonar_scan.sh backend
+        displayName: Analyse backend and wait for the Quality Gate
+        env:
+          SONAR_TOKEN: $(SONAR_TOKEN)   # secrets must be mapped explicitly
+
+  - job: sonarqube_frontend
+    displayName: SonarQube frontend (React)
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    timeoutInMinutes: 25
+    steps:
+      - checkout: self
+        fetchDepth: 0   # SonarQube needs the history to determine "new code"
+      - template: templates/setup-tools.yml
+      - script: sh scripts/011_sonar_scan.sh frontend
+        displayName: Analyse frontend and wait for the Quality Gate
+        env:
+          SONAR_TOKEN: $(SONAR_TOKEN)   # secrets must be mapped explicitly
+
+  - job: dependency_scan
+    displayName: Dependency scan
+    steps:
+      - checkout: self
+        fetchDepth: 1
+      - template: templates/setup-tools.yml
+      - script: sh scripts/010_scan_dependencies.sh
+        displayName: No HIGH/CRITICAL vulnerabilities in NuGet and npm packages
+
+  - job: docker
+    displayName: Docker build & scan
+    condition: ne(variables['Build.Reason'], 'Schedule')
+    timeoutInMinutes: 25
+    steps:
+      - checkout: self
+        fetchDepth: 1
+      - script: |
+          for e in dev test acc prod; do
+            echo "== $e"
+            set -a; . "./deploy/env/$e.env.example"; set +a
+            MSSQL_SA_PASSWORD=Validate-only-1 API_IMAGE=validate WEB_IMAGE=validate \
+              docker compose -f deploy/compose.yml -f "deploy/compose.$e.yml" config --quiet || exit 1
+          done
+        displayName: Validate the DTAP compose files
+      - task: Docker@2
+        displayName: Log in to the registry
+        inputs:
+          command: login
+          containerRegistry: ghcr-projectcontrol
+      # Build once: reused when this source version was built before, else built, scanned, pushed
+      - script: SOURCE_URL="$(Build.Repository.Uri)" sh scripts/014_images.sh ensure
+        displayName: Build once (or reuse), Trivy scan, push
+      - script: sh scripts/014_images.sh tag "sha-$(git rev-parse --short=7 HEAD)"
+        displayName: Tag the images with this commit (no rebuild)
+        condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
