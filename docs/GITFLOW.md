@@ -3,12 +3,12 @@
 ## Branches
 | Branch | Purpose | How is it updated? |
 |---|---|---|
-| `main` | Delivered, stable version | Only through a PR from `develop` (normal delivery), `release/*` or `hotfix/*` |
+| `main` | Delivered, stable version | Only through a PR from `release/*` (normal delivery) or `hotfix/*` |
 | `develop` | Integration of finished features | Only through a PR from `feature/*` or `bugfix/*` |
 | `feature/IT2627T05-XX` | One Jira ticket | Your commits; **not** deleted after merging |
 | `bugfix/IT2627T05-XX` | Bug on `develop` | Same as feature |
 | `hotfix/IT2627T05-XX` | Urgent bug on `main` | PR to `main` and to `develop` |
-| `release/x.y.z` | Preparing a delivery | PR to `main` |
+| `release/x.y.z` | Preparing a delivery: created from `develop` only when a version is ready (e.g. end of a sprint), see **Delivering to main** | PR to `main` |
 
 ### DTAP environments
 Every long-lived branch belongs to one environment. Code only moves forward through a merge, never by deploying a work branch directly.
@@ -19,6 +19,8 @@ Every long-lived branch belongs to one environment. Code only moves forward thro
 | **T**est | `develop` | automatically after every merge, once CI is green | `CD Test` workflow |
 | **A**cceptance | `release/x.y.z` | automatically after every push, once CI is green | `CD Acceptance` workflow |
 | **P**roduction | `main` | after a merge, **only after manual approval** | `CD Production` workflow |
+
+A release branch is **not** created automatically: acceptance only gets a new version when the team creates `release/x.y.z` (see **Delivering to main**). Until then the acceptance environment stays empty, which is expected.
 
 `hotfix/*` is never deployed on its own: it reaches production through its PR to `main`. See `docs/CI_CD.md`.
 
@@ -54,7 +56,7 @@ GitHub runs the same checks automatically on every PR.
 | `005_scan_secrets.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Scans the full Git history for secrets (GitHub does the same automatically on every PR) |
 | `006_open_pr.sh` | Optional | Everyone | Only if you prefer the terminal over the website | Runs 005 and 004, pushes the branch, opens the PR and waits for the GitHub checks |
 | `007_setup_sonarqube.sh` | Once, admin only | Admin | Once | SonarQube projects (main branch `develop`), quality gate (*Sonar way* on the Free plan, *VanRoey way* prepared), `SONAR_TOKEN` secret |
-| `008_setup_environments.sh` | Once, admin only | Admin | Once | GitHub environments `test`, `acceptance`, `production` (approval) with their secrets |
+| `008_setup_environments.sh` | Once, admin only | Admin | Once, **before the first sprint review / release** (see **Delivering to main**) | GitHub environments `test`, `acceptance`, `production` (approval) with their secrets |
 | `009_build_test.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Build + lint + tests + coverage ≥ 80% (same as the *Build & test* check) |
 | `010_scan_dependencies.sh` | Optional | Everyone | After adding or updating a package | Vulnerable NuGet/npm packages (same as the *Dependency scan* check) |
 | `011_sonar_scan.sh` | Optional | Everyone | When you want the Quality Gate before the PR | SonarQube analysis + Quality Gate (same as the *SonarQube backend (C#)* and *SonarQube frontend (React)* checks) |
@@ -158,13 +160,50 @@ For the PR description:
 This is the same check that GitHub runs on every PR as **Gitflow & PR template** (`scripts/check_pr.py`). If it passes locally, it passes on GitHub.
 
 ## Delivering to main
-When `develop` contains a version that is ready to deliver (e.g. end of a sprint):
-1. **Pull requests → New pull request**, base: `main` ← compare: `develop`.
-2. Fill in the template; list the tickets included in this delivery under *Description*.
-3. Same rules as any PR: at least 1 approval, conversations resolved, checks green.
-4. Merge with a merge commit. `develop` is never deleted.
+When `develop` contains a version that is ready to deliver (e.g. end of a sprint), it goes
+through **acceptance** before production. The release PR to `main` must state that the version
+was deployed to acceptance and who accepted it (*Gitflow & PR template* check), so a delivery
+always uses a release branch.
 
-`feature/*` and `bugfix/*` branches can never target `main` directly.
+> **Before the first sprint review / delivery (once, admin only):**
+> ```bash
+> sh scripts/008_setup_environments.sh <reviewer1> <reviewer2>
+> ```
+> This creates the GitHub environments `test`, `acceptance`, `production` and `backup` with a
+> random database password per environment (stored only as a GitHub secret, never printed), the
+> `BACKUP_KEY` for the encrypted backups, and the reviewers who approve production deployments
+> (GitHub usernames, at least one; nobody can approve their own deployment). It also limits
+> every environment to its own branch (test: `develop`, acceptance: `release/*`, production:
+> `main`). Without it GitHub creates the environments on first use **without any protection**:
+> production would deploy without approval, any branch could deploy, and the backups have no
+> `BACKUP_KEY`. The script also writes the `BACKUP_KEY` to a file in your home folder: put it in
+> the team's password manager and delete the file.
+> Check: *Settings → Environments* shows `test`, `acceptance`, `production` and `backup`.
+
+1. Create the release branch from `develop` and push it (the version number in the name):
+   ```bash
+   git checkout develop
+   git pull
+   git checkout -b release/0.1.0
+   git push -u origin release/0.1.0
+   ```
+2. GitHub runs **CI** on `release/0.1.0` and then **CD Acceptance**: the same images as on test
+   are deployed to **acceptance** (nothing is rebuilt). Check *Actions → CD Acceptance* and
+   *Deployments → acceptance*.
+3. The product owner tests on acceptance. Found a problem? Fix it the normal way (a
+   `bugfix/IT2627T05-XX` PR into `develop`, deployed to test), then create the next release
+   branch from `develop` (`release/0.1.1`), which is deployed to acceptance again. Never commit
+   on a release branch: it only carries what passed through `develop`.
+4. **Pull requests → New pull request**, base: `main` ← compare: `release/0.1.0`. The release
+   template is used: list the *Included tickets*, fill in *Acceptance* (deployed to acceptance:
+   yes, accepted by: name).
+5. Same rules as any PR: at least 1 approval, conversations resolved, checks green.
+   Merge with a merge commit → **CD Production** waits for a reviewer's approval, then deploys.
+   The release branch is never deleted.
+
+`feature/*` and `bugfix/*` branches can never target `main` directly. A PR `develop` → `main`
+is technically allowed, but skips acceptance; only use it when the team agreed on that for this
+delivery and someone accepted the version on test.
 
 ## Review and merge
 1. Ask a team member to review (not yourself).

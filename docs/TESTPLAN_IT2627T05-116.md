@@ -24,6 +24,8 @@ feature/IT2627T05-XX ──PR──▶ develop
   no `DEPLOY_TARGET=azure`, so *CD Test* deploys **on the GitHub runner itself**: the containers
   really start, the database really migrates, the smoke test really runs – but the environment
   disappears after the run. The evidence is the green run with the smoke test in its log.
+  On the runner the database gets a random throw-away password, so *CD Test* works even before
+  the admin ran `008` (P2).
 - Later, without changing any code:
     - own server: `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, … in the environment `test` (`docs/CI_CD.md`);
     - Azure: `sh scripts/015_setup_azure.sh test` (`docs/AZURE.md`).
@@ -35,8 +37,8 @@ feature/IT2627T05-XX ──PR──▶ develop
 | Step | Who | Command / action | Status |
 |---|---|---|---|
 | P1 | admin | SonarQube: `sh scripts/007_setup_sonarqube.sh` | ✅ done |
-| P2 | admin | `sh scripts/008_setup_environments.sh <reviewer1> <reviewer2>` | |
-| P3 | admin | `sh scripts/001_setup_github.sh` (ruleset with all required checks) | |
+| P2 | admin | `sh scripts/008_setup_environments.sh <reviewer1> <reviewer2>` – not needed for the tests below, **required before the first sprint review / release** (production approval, branch rules per environment, `BACKUP_KEY`; see `docs/GITFLOW.md` → *Delivering to main*) | |
+| P3 | admin | `sh scripts/001_setup_github.sh` (ruleset with all required checks) | ✅ done |
 | P4 | everyone | `sh scripts/002_setup_hooks.sh` + Gitleaks installed | |
 | P5 | you | branch `feature/IT2627T05-116` pushed with all files | ✅ done |
 
@@ -99,10 +101,35 @@ an admin. **Evidence:** screenshot. Then close the PR **without merging**.
 - `1. Resolve the images CI built` → `API_IMAGE=ghcr.io/…@sha256:…` (nothing rebuilt)
 - `3. Deploy` → `Smoke test passed.` with `OK deployed version is live (<commit>)` and the
   `/version` output `{"environment":"test","commit":"…"}`
-- summary: commit, image digests, target "GitHub runner (temporary)"
+- summary: `test: success`, the commit, both image digests with their `src-…` version, target
+  "Docker Compose on the GitHub runner (temporary)" and "Same image digests as in the other
+  environments: built once by CI, never rebuilt here."
+- the notice "No DEPLOY_HOST or Azure for 'test': deploying on the GitHub runner (temporary)" is
+  expected as long as there is no server or Azure.
 
-**Evidence:** link to the run + screenshot of the summary. Under *Code → Environments → test*
-the deployment is listed with its commit.
+**Evidence:** link to the run + screenshot of the summary. On the repository home page,
+*Deployments → test* shows a green deployment of that commit; under *Packages* the images
+`projectcontrol-api` and `projectcontrol-web` carry the tags `src-…`, `sha-<commit>` and `test`.
+
+**If *CI* on `develop` is red on the SonarQube checks right after the first merge:** the very first
+analysis of `develop` is only the starting point for "new code", so SonarQube Cloud has no gate
+status yet (`curl -s "https://sonarcloud.io/api/qualitygates/project_status?projectKey=Team5-VanRoey_IT-Project-Van-Roey_frontend&branch=develop"`
+returns `"status":"NONE"`) and the scanner reports that as FAILED. *Re-run failed jobs* once; from
+the second analysis on the gate is computed and *CD Test* starts.
+
+### B4 · Look at the deployed test version yourself (optional)
+The test environment on the runner is gone after the run, but the same images can be started
+locally (nothing is built):
+```bash
+gh auth refresh -s read:packages
+gh auth token | docker login ghcr.io -u <github-username> --password-stdin
+git checkout develop && git pull
+cp deploy/env/test.env.example deploy/env/test.env    # fill in MSSQL_SA_PASSWORD
+sh scripts/012_deploy.sh test
+```
+**Expected:** only `pull` of `…@sha256:…` (no build), `Smoke test passed`; http://localhost:8081
+shows the app and http://localhost:8081/version shows `"environment":"test"` with the same commit
+and image versions as the *CD Test* summary. Clean up: `sh scripts/012_deploy.sh test reset`.
 
 ## Part C – IT2627T05-183: quality and security rules
 
@@ -155,6 +182,10 @@ Never use `--no-verify`.
 | 183 | SonarQube Quality Gate and minimum 80% test coverage set up | C1a–C1d | |
 | 183 | Security rules for vulnerabilities, dependencies and secrets defined | C2a–C2e | |
 | 183 | Quality and security rules documented | C3 | |
+| 184 | Built and deployed after an approved merge, image version traceable, smoke test | B3 (B4 optional) | |
 | 116 | Acceptance criteria of the story | all of the above | |
 
 Afterwards: demo PRs closed without merging, time logged on IT2627T05-116.
+
+Not part of this story: acceptance (`release/*`) and production (`main`) use the same workflows
+and are tested at the first release (see `docs/GITFLOW.md` → *Delivering to main*).
