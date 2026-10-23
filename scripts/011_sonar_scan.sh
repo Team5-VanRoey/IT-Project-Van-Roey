@@ -154,6 +154,7 @@ scan_backend() {
     /d:sonar.token="$SONAR_TOKEN" \
     /d:sonar.cs.opencover.reportsPaths="$results/**/coverage.opencover.xml" \
     /d:sonar.cs.vstest.reportsPaths="$results/*.trx" \
+    /d:sonar.scanner.scanAll=false \
     /d:sonar.exclusions="**/Migrations/**,**/obj/**,**/bin/**" \
     /d:sonar.coverage.exclusions="**/ProjectControl.ServiceDefaults/**,**/ProjectControl.AppHost/**,**/Program.cs,**/Migrations/**" \
     /d:sonar.qualitygate.wait=true \

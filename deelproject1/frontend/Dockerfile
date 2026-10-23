@@ -12,6 +12,9 @@ COPY . .
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine
+USER root
+RUN apk upgrade --no-cache
+USER 101
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 # Default for Docker Compose; Azure sets it to the API container app (scripts/015_setup_azure.sh)
 ENV API_UPSTREAM=http://api:8080
