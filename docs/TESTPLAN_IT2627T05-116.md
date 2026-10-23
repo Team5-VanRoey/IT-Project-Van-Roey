@@ -25,8 +25,8 @@ feature/IT2627T05-XX ──PR──▶ develop
   really start, the database really migrates, the smoke test really runs – but the environment
   disappears after the run. The evidence is the green run with the smoke test in its log.
 - Later, without changing any code:
-  - own server: `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, … in the environment `test` (`docs/CI_CD.md`);
-  - Azure: `sh scripts/015_setup_azure.sh test` (`docs/AZURE.md`).
+    - own server: `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, … in the environment `test` (`docs/CI_CD.md`);
+    - Azure: `sh scripts/015_setup_azure.sh test` (`docs/AZURE.md`).
 - SonarQube runs on SonarQube Cloud (Free plan, gate *Sonar way*, see
   `docs/QUALITY_AND_SECURITY.md` Q3).
 
