@@ -15,12 +15,12 @@ import { msalConfig } from './auth/authConfig.ts'
 const msalInstance = new PublicClientApplication(msalConfig)
 
 // MSAL must be initialized before any other call on the instance
-msalInstance.initialize().then(() => {
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <MsalProvider instance={msalInstance}>
-        <App />
-      </MsalProvider>
-    </StrictMode>,
-  )
-})
+await msalInstance.initialize()
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <MsalProvider instance={msalInstance}>
+      <App />
+    </MsalProvider>
+  </StrictMode>,
+)

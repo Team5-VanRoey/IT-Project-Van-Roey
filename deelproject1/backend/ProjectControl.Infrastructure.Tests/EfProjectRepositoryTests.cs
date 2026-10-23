@@ -25,6 +25,7 @@ public class EfProjectRepositoryTests : IDisposable
     public void Dispose()
     {
         _connection.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     [Fact]

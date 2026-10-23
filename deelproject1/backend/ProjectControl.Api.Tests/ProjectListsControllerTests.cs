@@ -25,7 +25,7 @@ public class ProjectListsControllerTests
         var result = await _controller.GetAll();
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<ProjectListSnapshot>>(ok.Value));
+        Assert.Single(Assert.IsType<IReadOnlyList<ProjectListSnapshot>>(ok.Value, exactMatch: false));
     }
 
     [Fact]

@@ -33,7 +33,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Databas
 {
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ProjectControlDbContext>();
-    dbContext.Database.Migrate();
+    await dbContext.Database.MigrateAsync();
 }
 
 // Behind the reverse proxy (frontend container) TLS ends at the proxy, so no redirect there
@@ -48,4 +48,4 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapDefaultEndpoints();
 
-app.Run();
+await app.RunAsync();

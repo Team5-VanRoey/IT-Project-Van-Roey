@@ -11,7 +11,7 @@ function App() {
 
   const handleLogout = () => {
     if (isAuthenticated) {
-      instance.logoutRedirect()
+      void instance.logoutRedirect()
       return
     }
 
@@ -24,7 +24,7 @@ function App() {
 
   return (
     <LoginPage
-      onLogin={() => instance.loginRedirect(loginRequest)}
+      onLogin={() => void instance.loginRedirect(loginRequest)}
       onSkipLogin={() => setShowDashboard(true)}
     />
   )
