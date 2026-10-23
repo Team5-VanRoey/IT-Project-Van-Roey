@@ -1,0 +1,29 @@
+# P - Production: deployed after a merge on 'main', only after manual approval in the
+# GitHub environment 'production' (.github/workflows/cd-production.yml).
+name: projectcontrol-prod
+
+services:
+  db:
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  api:
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  web:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /etc/nginx/conf.d   # nginx writes its config from the template at startup
+    deploy:
+      resources:
+        limits:
+          memory: 128m

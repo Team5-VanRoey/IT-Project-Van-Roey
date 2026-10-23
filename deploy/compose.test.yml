@@ -1,0 +1,10 @@
+# T - Test: deployed automatically after every merge on 'develop' (.github/workflows/cd-test.yml).
+# Fresh test data is fine here; the database may be reset with: sh scripts/012_deploy.sh test reset
+name: projectcontrol-test
+
+services:
+  api:
+    deploy:
+      resources:
+        limits:
+          memory: 512m

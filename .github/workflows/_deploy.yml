@@ -1,0 +1,188 @@
+# Reusable deployment workflow for cd-test.yml, cd-acceptance.yml, cd-production.yml and
+# redeploy.yml. Not started on its own.
+#
+# BUILD ONCE, DEPLOY EVERYWHERE: this workflow never builds an image. It deploys the images the
+# CI workflow built for the commit (scripts/014_images.sh resolve -> repo@sha256:...), so test,
+# acceptance and production run byte-for-byte the same containers; only the settings differ.
+#
+#   0. approved  test/production: the commit must have come in through a merged PR that another
+#                team member approved (scripts/018_check_approved_merge.sh)
+#   1. resolve   which images belong to this commit (fails if CI did not build them)
+#   2. rescan    Trivy again on those exact images (vulnerabilities found since the build)
+#   3. deploy    in the GitHub environment, to the target in its variable DEPLOY_TARGET:
+#                  azure    scripts/016_deploy_azure.sh  (OIDC login, smoke test, auto-rollback)
+#                  compose  scripts/012_deploy.sh        (DEPLOY_HOST over SSH, or the runner)
+#   4. record    tag the images with the environment name (test / acc / prod), so the registry
+#                shows which version runs where; the app itself shows it on /version, and the
+#                smoke test checks that /version reports exactly this commit
+#
+# The scripts do the work, so Azure DevOps (azure-pipelines/cd.yml) deploys the same way.
+name: Deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub environment (test, acceptance, production)
+        required: true
+        type: string
+      dtap:
+        description: Short name used by the scripts and deploy/compose.<dtap>.yml (test, acc, prod)
+        required: true
+        type: string
+      sha:
+        description: Commit whose images are deployed (built by CI)
+        required: true
+        type: string
+      approved_branch:
+        description: When set, the commit must have been merged into this branch through an approved PR
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  pull-requests: read  # check that the merge was approved
+  packages: write   # environment tag on the images
+  id-token: write   # OIDC login to Azure
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.APP_URL }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      CI: 'true'
+      DTAP: ${{ inputs.dtap }}
+      SHA: ${{ inputs.sha }}
+      DEPLOY_COMMIT: ${{ inputs.sha }}
+      TARGET: ${{ vars.DEPLOY_TARGET || 'compose' }}
+      APP_URL: ${{ vars.APP_URL }}
+      # compose target
+      WEB_PORT: ${{ vars.WEB_PORT || '8080' }}
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'deploy' }}
+      MIGRATE_ON_STARTUP: ${{ vars.MIGRATE_ON_STARTUP || 'true' }}
+      # azure target
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.sha }}
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 0. Only approved merges are deployed
+        if: inputs.approved_branch != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ inputs.approved_branch }}
+        run: sh scripts/018_check_approved_merge.sh "$SHA" "$BRANCH"
+
+      - name: 1. Resolve the images CI built for this commit
+        run: |
+          images=$(sh scripts/014_images.sh resolve) || {
+            echo "::error::No images for $SHA. They are built by the CI workflow (job 'Docker build & scan')."
+            exit 1
+          }
+          printf '%s\n' "$images"
+          printf '%s\n' "$images" >> "$GITHUB_ENV"
+
+      - name: 2. Scan these exact images again (Trivy)
+        run: sh scripts/014_images.sh scan-deployed
+
+      # ---------- 3a. Azure Container Apps ----------
+      - name: Sign in to Azure (OIDC, no secrets)
+        if: vars.DEPLOY_TARGET == 'azure'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: 3. Deploy to Azure, smoke test, rollback on failure
+        if: vars.DEPLOY_TARGET == 'azure'
+        run: sh scripts/016_deploy_azure.sh "$DTAP"
+
+      # ---------- 3b. Docker Compose ----------
+      - name: Compose settings
+        if: vars.DEPLOY_TARGET != 'azure'
+        env:
+          MSSQL_SA_PASSWORD: ${{ secrets.MSSQL_SA_PASSWORD }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          case "$DTAP" in
+            test) echo "ASPNETCORE_ENVIRONMENT=Test" ;;
+            acc)  echo "ASPNETCORE_ENVIRONMENT=Staging" ;;
+            prod) echo "ASPNETCORE_ENVIRONMENT=Production"; echo "MSSQL_PID=Express" ;;
+          esac >> "$GITHUB_ENV"
+
+          if [ -n "$MSSQL_SA_PASSWORD" ]; then
+            echo "MSSQL_SA_PASSWORD=$MSSQL_SA_PASSWORD" >> "$GITHUB_ENV"
+          elif [ -z "$DEPLOY_HOST" ]; then
+            # Throw-away database on the runner: a random password that is never stored
+            pw="Ci-$(openssl rand -hex 16)"
+            echo "::add-mask::$pw"
+            echo "MSSQL_SA_PASSWORD=$pw" >> "$GITHUB_ENV"
+          else
+            echo "::error::Secret MSSQL_SA_PASSWORD is missing in the '$ENVIRONMENT' environment."
+            exit 1
+          fi
+
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "::warning::No DEPLOY_HOST or Azure for '$ENVIRONMENT': deploying on the GitHub runner (temporary)."
+          fi
+
+      - name: SSH access to the server
+        if: vars.DEPLOY_TARGET != 'azure' && vars.DEPLOY_HOST != ''
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [ -n "$SSH_KEY" ] || { echo "::error::Secret DEPLOY_SSH_KEY is missing."; exit 1; }
+          [ -n "$KNOWN_HOSTS" ] || { echo "::error::Variable DEPLOY_KNOWN_HOSTS is missing (ssh-keyscan <host>)."; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          eval "$(ssh-agent -s)"
+          printf '%s\n' "$SSH_KEY" | ssh-add -
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+      - name: 3. Deploy with Docker Compose and run the smoke test
+        if: vars.DEPLOY_TARGET != 'azure'
+        run: sh scripts/012_deploy.sh "$DTAP" up
+
+      - name: 4. Record which version runs in ${{ inputs.environment }}
+        run: sh scripts/014_images.sh tag "$DTAP"
+
+      - name: Summary
+        if: always()
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          STATUS: ${{ job.status }}
+        run: |
+          case "$TARGET" in
+            azure) where="Azure Container Apps ($AZURE_RESOURCE_GROUP)" ;;
+            *)     where="Docker Compose on ${DEPLOY_HOST:-the GitHub runner (temporary)}" ;;
+          esac
+          {
+            echo "### $ENVIRONMENT: $STATUS"
+            echo "- Commit: $SHA"
+            [ -n "$APP_URL" ] && echo "- Running version: $APP_URL/version"
+            echo "- API: \`${API_IMAGE:-?}\` (${API_TAG:-?})"
+            echo "- Web: \`${WEB_IMAGE:-?}\` (${WEB_TAG:-?})"
+            echo "- Target: $where"
+            [ -n "$APP_URL" ] && echo "- URL: $APP_URL"
+            echo ""
+            echo "Same image digests as in the other environments: built once by CI, never rebuilt here."
+          } >> "$GITHUB_STEP_SUMMARY"

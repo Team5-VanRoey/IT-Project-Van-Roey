@@ -1,0 +1,141 @@
+# Disaster recovery: restore the database of acceptance or production (docs/DISASTER_RECOVERY.md).
+# Actions -> Restore -> Run workflow, from the branch of that environment (acceptance: release/*,
+# production: main). Production waits for a reviewer's approval, like a deployment.
+#
+#   Docker Compose: takes the backup from a Backup run (latest successful one, or the run id you
+#     give), checks and decrypts it, makes a safety backup of the current database, restores,
+#     and runs the smoke test (scripts/020_restore.sh).
+#   Azure: point-in-time restore of Azure SQL to the time you give (scripts/020_restore.sh --time).
+#
+# Test is never restored: its data is disposable; redeploy or reset it instead.
+name: Restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to restore
+        required: true
+        type: choice
+        options: [acceptance, production]
+      backup_run:
+        description: Docker Compose - run id of the Backup run to restore (empty = latest successful)
+        required: false
+        type: string
+      point_in_time:
+        description: Azure - restore to this moment, UTC (e.g. 2026-10-23T08:00:00Z)
+        required: false
+        type: string
+      reason:
+        description: Why (incident / ticket) - shown in the run summary
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read     # download the backup artifact
+  id-token: write   # OIDC login to Azure
+
+concurrency:
+  group: deploy-${{ inputs.environment }}   # never at the same time as a deployment
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    name: Restore ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.APP_URL }}
+    env:
+      CI: 'true'
+      DTAP: ${{ inputs.environment == 'production' && 'prod' || 'acc' }}
+      DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET }}
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'deploy' }}
+      WEB_PORT: ${{ vars.WEB_PORT || '8080' }}
+      APP_URL: ${{ vars.APP_URL }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      BACKUP_DIR: ${{ github.workspace }}/backup-in
+    steps:
+      - uses: actions/checkout@v7
+
+      # ---------- Azure: point-in-time restore ----------
+      - name: Sign in to Azure (OIDC)
+        if: vars.DEPLOY_TARGET == 'azure'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Point-in-time restore (Azure SQL)
+        if: vars.DEPLOY_TARGET == 'azure'
+        env:
+          WHEN: ${{ inputs.point_in_time }}
+        run: |
+          [ -n "$WHEN" ] || { echo "::error::Give point_in_time for an Azure environment."; exit 1; }
+          CONFIRM="$DTAP" sh scripts/020_restore.sh "$DTAP" --time "$WHEN"
+
+      # ---------- Docker Compose: restore a backup ----------
+      - name: Download the backup
+        if: vars.DEPLOY_TARGET != 'azure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ inputs.backup_run }}
+        run: |
+          [ -n "$DEPLOY_HOST" ] || { echo "::error::No DEPLOY_HOST: this environment has no server, nothing to restore."; exit 1; }
+          if [ -z "$RUN" ]; then
+            RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backup.yml --status success \
+                  --limit 1 --json databaseId --jq '.[0].databaseId')
+          fi
+          [ -n "$RUN" ] || { echo "::error::No successful Backup run found."; exit 1; }
+          gh run download "$RUN" --repo "$GITHUB_REPOSITORY" --name "backup-$DTAP" --dir "$BACKUP_DIR"
+          echo "Backup run $RUN: $(cat "$BACKUP_DIR/LATEST")"
+          echo "BACKUP_RUN=$RUN" >> "$GITHUB_ENV"
+
+      - name: SSH access to the server
+        if: vars.DEPLOY_TARGET != 'azure'
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          eval "$(ssh-agent -s)"
+          printf '%s\n' "$SSH_KEY" | ssh-add -
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+      - name: Safety backup, restore, smoke test
+        if: vars.DEPLOY_TARGET != 'azure'
+        env:
+          BACKUP_KEY: ${{ secrets.BACKUP_KEY }}
+          MSSQL_SA_PASSWORD: ${{ secrets.MSSQL_SA_PASSWORD }}
+        run: CONFIRM="$DTAP" sh scripts/020_restore.sh "$DTAP" latest
+
+      - name: Keep the safety backup (30 days)
+        if: always() && vars.DEPLOY_TARGET != 'azure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pre-restore-${{ inputs.environment }}
+          path: backup-in/pre-restore/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Summary
+        if: always()
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          REASON: ${{ inputs.reason }}
+          WHEN: ${{ inputs.point_in_time }}
+          STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "### Restore $ENVIRONMENT: $STATUS"
+            echo "- Reason: $REASON"
+            echo "- Requested by: @$GITHUB_ACTOR"
+            if [ "$DEPLOY_TARGET" = "azure" ]; then echo "- Point in time: $WHEN"
+            else echo "- Backup: run ${BACKUP_RUN:-?}, $(cat "$BACKUP_DIR/LATEST" 2>/dev/null || echo '?')"; fi
+          } >> "$GITHUB_STEP_SUMMARY"

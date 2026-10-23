@@ -1,0 +1,23 @@
+# Local SonarQube server (Community Build) to run the Quality Gate on your own computer.
+#   docker compose -f deploy/compose.sonarqube.yml up -d        -> http://localhost:9000 (admin / admin)
+#   SONAR_HOST_URL=http://localhost:9000 SONAR_TOKEN=<token> sh scripts/011_sonar_scan.sh
+# Linux/WSL needs: sudo sysctl -w vm.max_map_count=524288
+# The CI uses SonarCloud (or the server in the SONAR_HOST_URL variable), not this container.
+name: sonarqube
+
+services:
+  sonarqube:
+    image: sonarqube:community
+    ports:
+      - "9000:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+
+volumes:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:

@@ -1,0 +1,69 @@
+# Base definition shared by all DTAP environments.
+# Never used alone: always combined with one environment file, e.g.
+#   docker compose -f deploy/compose.yml -f deploy/compose.test.yml --env-file deploy/env/test.env up -d
+# scripts/012_deploy.sh does this for you. See docs/CI_CD.md.
+#
+# Build once, deploy everywhere: test, acceptance and production run the SAME images.
+# API_IMAGE and WEB_IMAGE are set by the CD workflow to the image digests that CI built
+# (scripts/014_images.sh resolve); only settings differ per environment, never the image.
+# Secrets (MSSQL_SA_PASSWORD) come from the env file or the CI environment, never from this file.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: ${MSSQL_PID:-Developer}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is not set, see deploy/env/*.env.example}
+    volumes:
+      - db-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    logging: *logging
+
+  api:
+    image: ${API_IMAGE:?API_IMAGE is not set (sh scripts/014_images.sh resolve)}
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:?ASPNETCORE_ENVIRONMENT is not set}
+      ConnectionStrings__ProjectControl: "Server=db;Database=${DB_NAME:-ProjectControl};User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+      Database__MigrateOnStartup: ${MIGRATE_ON_STARTUP:-true}
+      HealthChecks__Enabled: "true"
+      BehindReverseProxy: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *logging
+
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE is not set (sh scripts/014_images.sh resolve)}
+    environment:
+      # Traceability, shown on /version (set by scripts/012_deploy.sh)
+      DEPLOY_ENV: ${DEPLOY_ENV:-unknown}
+      DEPLOY_COMMIT: ${DEPLOY_COMMIT:-unknown}
+      API_VERSION: ${API_TAG:-unknown}
+      WEB_VERSION: ${WEB_TAG:-unknown}
+    ports:
+      - "${WEB_PORT:?WEB_PORT is not set}:8080"
+    depends_on:
+      - api
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  db-data:

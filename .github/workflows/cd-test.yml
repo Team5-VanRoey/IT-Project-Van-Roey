@@ -1,0 +1,39 @@
+# T - Test: every APPROVED merge on develop is built (by CI) and deployed automatically.
+# IT2627T05-184: traceable image version (digest + src/sha tags, /version) and a smoke test.
+#
+# Build once, deploy everywhere: nothing is built here. CI built the images for this commit
+# (or reused them, when the source is unchanged since develop/release), and this workflow
+# deploys exactly those image digests.
+#
+# Starts when the CI workflow finished for a push on 'develop' (i.e. after a merge) and
+# deploys exactly the commit CI tested, and only when CI was green.
+# Rollback or re-run with another commit: Actions -> Redeploy.
+# Can also be started by hand: Actions -> CD Test -> Run workflow.
+# See docs/CI_CD.md.
+name: CD Test
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: ['develop']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: write
+  id-token: write   # OIDC login to Azure (DEPLOY_TARGET=azure)
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: test
+      dtap: test
+      sha: ${{ github.event.workflow_run.head_sha || github.sha }}
+      approved_branch: develop   # only commits merged through an approved PR
+    secrets: inherit

@@ -44,7 +44,7 @@ Checked twice, on purpose:
 |---|---|---|---|
 | *Build & test* – backend | line coverage of all test projects merged | 80% | `MIN_COVERAGE` in `009_build_test.sh`, `scripts/coverage_check.py` |
 | *Build & test* – frontend | lines, statements, functions, branches | 80% each | `coverage.thresholds` in `deelproject1/frontend/vite.config.ts` |
-| SonarQube | coverage on **new code** | 80% | quality gate *Sonar way* (active on the Free plan, see Q3) |
+| SonarQube | coverage on **new code** and **overall** | 80% | quality gate *VanRoey way* (`007_setup_sonarqube.sh`) |
 
 **Excluded from coverage** (no logic to test, or generated):
 `ProjectControl.AppHost`, `ProjectControl.ServiceDefaults`, `Program.cs`, EF `Migrations/`,
@@ -57,35 +57,24 @@ Adding an exclusion requires a short reason in the PR and approval in review –
 Two SonarQube projects, both must be green:
 `Team5-VanRoey_IT-Project-Van-Roey` (backend, C#) and `…_frontend` (TypeScript/React).
 
-**Active gate: *Sonar way*** (built in). Our organization is on the SonarQube Cloud **Free** plan,
-which does not allow assigning a custom gate to a project, so both projects use *Sonar way*.
-Its conditions, all on **new code**:
+Quality gate **VanRoey way**:
 
-| Condition (new code) | Threshold |
+| Condition | Threshold |
 |---|---|
-| Coverage | ≥ 80% |
-| Duplicated lines | ≤ 3% |
-| Reliability rating (bugs) | A |
-| Security rating (vulnerabilities) | A |
-| Maintainability rating (code smells) | A |
-| Security hotspots reviewed | 100% |
+| Coverage on new code | ≥ 80% |
+| Overall coverage | ≥ 80% |
+| Duplicated lines on new code | ≤ 3% |
+| Reliability rating on new code (bugs) | A |
+| Security rating on new code (vulnerabilities) | A |
+| Maintainability rating on new code (code smells) | A |
+| Security hotspots reviewed on new code | 100% |
+| Overall security rating | A |
 
-What *Sonar way* does not check on the **whole** project is covered elsewhere:
-
-| Rule for the whole project | Where it is enforced |
-|---|---|
-| Overall coverage ≥ 80% | *Build & test* (Q2) |
-| No known vulnerable dependencies | *Dependency scan* (S2) |
-
-**Prepared: *VanRoey way*.** `007_setup_sonarqube.sh` also creates our own gate *VanRoey way*:
-the six conditions above **plus** overall coverage ≥ 80% and overall security rating A. On the Free
-plan it exists but cannot be assigned (the script reports `SKIPPED`). On a paid plan (Team /
-Enterprise) running `007` again assigns it to both projects – nothing else changes.
-
-*New code* = the changes compared to `develop` (the main branch in SonarQube, set by `007`).
-The Free plan also analyses only PRs into `develop` and `develop` itself; PRs into `main` contain
-code that was already analysed on its way into `develop`. The same rules apply in Azure DevOps
-(`AZURE.md`).
+*New code* = the changes compared to `develop` (the main branch in SonarQube).
+**SonarQube Cloud Free** does not allow a custom gate: the built-in *Sonar way* then applies, which
+has the same new-code conditions (incl. coverage on new code ≥ 80%); the overall 80% is enforced by
+*Build & test*. Free also analyses only PRs into `develop`; PRs into `main` contain code that was
+already analysed on its way into `develop`. The same rules apply in Azure DevOps (`AZURE.md`).
 
 A red gate is fixed in the code. Marking an issue *false positive* or *won't fix* in SonarQube
 is only allowed with a comment that explains why, and is checked in the review.

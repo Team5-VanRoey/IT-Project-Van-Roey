@@ -1,0 +1,114 @@
+# Disaster recovery: daily backup of the acceptance and production databases
+# (docs/DISASTER_RECOVERY.md). Test is not backed up: its data is disposable (rebuilt by the CD).
+#
+#   Docker Compose on a server (DEPLOY_HOST): scripts/019_backup.sh makes a verified SQL Server
+#     backup, copies it OFF the server, encrypts it (AES-256, BACKUP_KEY) and stores it as an
+#     artifact of this run for 35 days. The server and the backups are never in the same place.
+#   Azure (DEPLOY_TARGET=azure): Azure SQL backs up automatically (point-in-time restore); this
+#     workflow only reports that, nothing to do.
+#   No server yet (CD deploys on the runner): nothing to back up, the job says so.
+#
+# Runs in the GitHub environment 'backup' (no approval, so the schedule never waits), created by
+# scripts/008_setup_environments.sh. Its settings, per DTAP environment (suffix _ACC / _PROD) or
+# shared: DEPLOY_HOST, DEPLOY_USER, DEPLOY_KNOWN_HOSTS, DEPLOY_TARGET (variables),
+# DEPLOY_SSH_KEY and BACKUP_KEY (secrets).
+# A red run means: no backup today -> pick it up the same day (see DISASTER_RECOVERY.md).
+name: Backup
+
+on:
+  schedule:
+    - cron: '23 1 * * *'   # every night 01:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Backup ${{ matrix.dtap }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: backup
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dtap: acc
+            key: ACC
+          - dtap: prod
+            key: PROD
+    env:
+      CI: 'true'
+      DTAP: ${{ matrix.dtap }}
+      DEPLOY_TARGET: ${{ vars[format('DEPLOY_TARGET_{0}', matrix.key)] || vars.DEPLOY_TARGET }}
+      DEPLOY_HOST: ${{ vars[format('DEPLOY_HOST_{0}', matrix.key)] || vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'deploy' }}
+      BACKUP_DIR: ${{ github.workspace }}/backup-out
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: What is there to back up?
+        id: what
+        run: |
+          if [ "$DEPLOY_TARGET" = "azure" ]; then
+            echo "mode=azure" >> "$GITHUB_OUTPUT"
+            echo "::notice::$DTAP runs on Azure SQL: automatic backups with point-in-time restore (restore.yml)."
+          elif [ -z "$DEPLOY_HOST" ]; then
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "::notice::$DTAP has no server yet (deployed on the runner, temporary): nothing to back up."
+          else
+            echo "mode=compose" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: SSH access to the server
+        if: steps.what.outputs.mode == 'compose'
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars[format('DEPLOY_KNOWN_HOSTS_{0}', matrix.key)] || vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [ -n "$SSH_KEY" ] || { echo "::error::Secret DEPLOY_SSH_KEY is missing in the 'backup' environment."; exit 1; }
+          [ -n "$KNOWN_HOSTS" ] || { echo "::error::Variable DEPLOY_KNOWN_HOSTS is missing (ssh-keyscan <host>)."; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          eval "$(ssh-agent -s)"
+          printf '%s\n' "$SSH_KEY" | ssh-add -
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+      - name: Backup, verify, encrypt
+        if: steps.what.outputs.mode == 'compose'
+        env:
+          BACKUP_KEY: ${{ secrets.BACKUP_KEY }}
+        run: sh scripts/019_backup.sh "$DTAP"
+
+      - name: Store the encrypted backup off the server (35 days)
+        if: steps.what.outputs.mode == 'compose'
+        uses: actions/upload-artifact@v7
+        with:
+          name: backup-${{ matrix.dtap }}
+          path: |
+            backup-out/*.enc
+            backup-out/*.sha256
+            backup-out/*.json
+            backup-out/LATEST
+          retention-days: 35
+          if-no-files-found: error
+
+      - name: Summary
+        if: always()
+        env:
+          MODE: ${{ steps.what.outputs.mode }}
+          STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "### Backup $DTAP: $STATUS"
+            case "$MODE" in
+              compose) echo "- Artifact \`backup-$DTAP\`: $(cat backup-out/LATEST 2>/dev/null || echo '-')" ;;
+              azure)   echo "- Azure SQL automatic backups (point-in-time restore)" ;;
+              *)       echo "- No server configured: nothing to back up" ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"

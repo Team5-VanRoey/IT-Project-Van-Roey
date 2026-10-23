@@ -1,0 +1,200 @@
+# CI: builds, tests and checks every change, so mistakes show up before they are merged.
+# It is also the ONLY place where release images are built (build once, deploy everywhere).
+#
+# Runs on every Pull Request to develop or main, and again after the merge on develop,
+# release/* and main. The CD workflows (cd-*.yml) only deploy a commit for which this run is
+# green, and they never build: they deploy the images this workflow built.
+#
+# The four jobs are REQUIRED status checks in the ruleset "Protect main and develop"
+# (scripts/001_setup_github.sh): a PR can only be merged when all of them pass.
+# Do not rename the jobs' names without updating the ruleset.
+#
+#   Build & test             scripts/009_build_test.sh          quality rules Q1, Q2
+#   SonarQube quality gate   scripts/011_sonar_scan.sh          quality rule  Q3
+#   Dependency scan          scripts/010_scan_dependencies.sh   security rule S2
+#   Docker build & scan      scripts/014_images.sh ensure       security rule S4
+#
+# Docker build & scan: each image is versioned by its own source (src-<git tree hash>). If that
+# version is already in the registry it is reused, otherwise it is built, scanned and pushed once.
+# Because the PR must be up to date with its target, the images built for the PR are exactly the
+# images that develop gets after the merge, and that test, acceptance and production will run.
+#
+# Every job runs a script from scripts/, so you can run exactly the same check locally,
+# and Azure DevOps (azure-pipelines/ci.yml) runs the very same scripts.
+# See docs/CI_CD.md and docs/QUALITY_AND_SECURITY.md.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main, 'release/**']
+  workflow_dispatch:
+  # Weekly on develop: only the Dependency scan runs, to find vulnerabilities that were
+  # published after a package was added (no Dependabot; security rule S2). Never deploys.
+  schedule:
+    - cron: '17 6 * * 1'   # Monday 06:17 UTC
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  NODE_VERSION: '22'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  build-test:
+    name: Build & test
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: deelproject1/frontend/package-lock.json
+
+      - name: Build, test and check coverage >= 80%
+        run: sh scripts/009_build_test.sh
+
+      - name: Upload test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: |
+            deelproject1/backend/TestResults/
+            deelproject1/frontend/coverage/
+            deelproject1/frontend/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  sonarqube:
+    name: SonarQube quality gate
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+      SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION || 'team5-vanroey' }}
+      SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY || 'Team5-VanRoey_IT-Project-Van-Roey' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # SonarQube needs the history to determine "new code"
+
+      - name: Check that SonarQube is configured
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::error::The SONAR_TOKEN secret is missing. The admin runs scripts/007_setup_sonarqube.sh once."
+            echo "PRs from forks never receive secrets: push your branch to this repository instead."
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: deelproject1/frontend/package-lock.json
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.sonar/cache
+          key: sonar-${{ runner.os }}
+
+      - name: Analyse and wait for the Quality Gate
+        run: sh scripts/011_sonar_scan.sh
+
+  dependency-scan:
+    name: Dependency scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: No HIGH/CRITICAL vulnerabilities in NuGet and npm packages
+        run: sh scripts/010_scan_dependencies.sh
+
+  docker:
+    name: Docker build & scan
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write   # push the images to ghcr.io
+    env:
+      # PRs from forks get no write token: build and scan only, nothing is pushed
+      PUSH: ${{ github.event.pull_request.head.repo.fork && '0' || '1' }}
+      SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate the DTAP compose files
+        run: |
+          for e in dev test acc prod; do
+            echo "== $e"
+            set -a
+            # shellcheck disable=SC1090
+            . "./deploy/env/$e.env.example"
+            set +a
+            MSSQL_SA_PASSWORD=Validate-only-1 API_IMAGE=validate WEB_IMAGE=validate \
+              docker compose -f deploy/compose.yml -f "deploy/compose.$e.yml" config --quiet
+          done
+
+      - uses: docker/login-action@v4
+        if: env.PUSH == '1'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build once (or reuse), Trivy scan, push
+        run: sh scripts/014_images.sh ensure
+
+      - name: Tag the images with this commit (no rebuild)
+        if: github.event_name == 'push'
+        run: sh scripts/014_images.sh tag "sha-$(git rev-parse --short=7 HEAD)"
+
+      - name: Summary
+        if: env.PUSH == '1'
+        run: |
+          {
+            echo "### Images for this commit"
+            echo '```'
+            sh scripts/014_images.sh resolve
+            echo '```'
+            echo "Test, acceptance and production deploy exactly these digests."
+          } >> "$GITHUB_STEP_SUMMARY"

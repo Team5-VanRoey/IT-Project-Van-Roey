@@ -1,0 +1,62 @@
+# Disaster recovery TEST (docs/DISASTER_RECOVERY.md): every month the latest production backup
+# is restored into a throw-away environment on the runner, the application is started with the
+# version that belongs to that backup, and the smoke test must pass (scripts/021_dr_test.sh).
+# This proves that the backups can really be restored and measures the recovery time.
+# Nothing touches a real server. A red run means the backups cannot be trusted: fix it first.
+name: DR test
+
+on:
+  schedule:
+    - cron: '41 4 3 * *'   # 3rd of every month, 04:41 UTC
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Which environment's latest backup to test
+        type: choice
+        options: [prod, acc]
+        default: prod
+
+permissions:
+  contents: read
+  actions: read     # download the backup artifact
+  packages: read    # pull the images
+
+jobs:
+  dr-test:
+    name: Restore test (${{ inputs.source || 'prod' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: backup   # BACKUP_KEY
+    env:
+      SOURCE: ${{ inputs.source || 'prod' }}
+      BACKUP_DIR: ${{ github.workspace }}/backup-in
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the latest backup
+        id: download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backup.yml --status success \
+                --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$run" ] || ! gh run download "$run" --repo "$GITHUB_REPOSITORY" --name "backup-$SOURCE" --dir "$BACKUP_DIR"; then
+            echo "::warning::No backup of $SOURCE found (no server yet, or Azure SQL with its own backups). Nothing to test."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "Backup run $run: $(cat "$BACKUP_DIR/LATEST")"
+
+      - uses: docker/login-action@v4
+        if: steps.download.outputs.found == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore into a throw-away environment and run the smoke test
+        if: steps.download.outputs.found == 'true'
+        env:
+          BACKUP_KEY: ${{ secrets.BACKUP_KEY }}
+        run: sh scripts/021_dr_test.sh latest "$SOURCE"
