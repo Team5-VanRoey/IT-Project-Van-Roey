@@ -12,7 +12,7 @@ COPY ProjectControl.Infrastructure/ProjectControl.Infrastructure.csproj ProjectC
 COPY ProjectControl.ServiceDefaults/ProjectControl.ServiceDefaults.csproj ProjectControl.ServiceDefaults/
 RUN dotnet restore ProjectControl.Api/ProjectControl.Api.csproj
 
-COPY ../../../../../../Users/12303235/Downloads/fix-pr8/IT-Project-Van-Roey/deelproject1/backend/ProjectControl.Api .
+COPY . .
 RUN dotnet publish ProjectControl.Api/ProjectControl.Api.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0

@@ -1,0 +1,53 @@
+.entra-test {
+  max-width: 720px;
+  margin-top: 32px;
+  padding: 20px;
+  border: 1px dashed var(--dev-yellow);
+  background-color: var(--surface-raised);
+}
+
+.entra-test h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+}
+
+.entra-test .dev-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: var(--dev-yellow);
+  color: var(--surface-page);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.entra-test-button {
+  margin-top: 16px;
+  padding: 10px 16px;
+  border: none;
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.entra-test-button:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.entra-test-error {
+  color: var(--status-red);
+}
+
+.entra-test pre {
+  margin-top: 16px;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 12px;
+}
