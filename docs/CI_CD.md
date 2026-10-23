@@ -92,11 +92,11 @@ workflow `_deploy.yml`:
    published since the build.
 3. **Deploy** – in the GitHub environment (`test` / `acceptance` / `production`), to the target
    in its variable `DEPLOY_TARGET`:
-    - `azure` – `scripts/016_deploy_azure.sh <env>` on Azure Container Apps (login with OIDC),
-      smoke test, **automatic rollback** to the previous images when it fails. Set up by
-      `scripts/015_setup_azure.sh`, see [`AZURE.md`](AZURE.md).
-    - `compose` (default) – `scripts/012_deploy.sh <env> up` pulls the images, starts the
-      containers, waits until they are healthy and runs the smoke test.
+   - `azure` – `scripts/016_deploy_azure.sh <env>` on Azure Container Apps (login with OIDC),
+     smoke test, **automatic rollback** to the previous images when it fails. Set up by
+     `scripts/015_setup_azure.sh`, see [`AZURE.md`](AZURE.md).
+   - `compose` (default) – `scripts/012_deploy.sh <env> up` pulls the images, starts the
+     containers, waits until they are healthy and runs the smoke test.
 
    The smoke test (`013_smoke_test.sh`) checks the frontend, `/health` and `/api/projects`.
    If anything fails, the run is red and shows the logs.
@@ -198,8 +198,9 @@ sh scripts/001_setup_github.sh                                 # ruleset with al
 sh scripts/015_setup_azure.sh test|acc|prod                    # optional: host the environment on Azure (AZURE.md)
 ```
 
-SonarQube Cloud **Free** has two limits the scripts take into account: no custom quality gate
-(the built-in *Sonar way* applies; the overall 80% is still enforced by *Build & test*), and only
+SonarQube Cloud **Free** has two limits the scripts take into account: a custom quality gate can
+be created but not assigned, so both projects use the built-in *Sonar way* (80% coverage on new
+code; the overall 80% is enforced by *Build & test*, see `QUALITY_AND_SECURITY.md` Q3), and only
 the main branch – set to `develop` by `007` – and PRs into it are analysed. PRs into `main`
 (release, hotfix) skip the Sonar step; that code was analysed on its way into `develop`.
 

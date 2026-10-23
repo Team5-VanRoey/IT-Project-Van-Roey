@@ -53,7 +53,7 @@ GitHub runs the same checks automatically on every PR.
 | `004_check_pr.sh` | Optional | Everyone | Before opening a PR, if you want to know in advance | Checks your branch, commits and PR description (GitHub does the same automatically) |
 | `005_scan_secrets.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Scans the full Git history for secrets (GitHub does the same automatically on every PR) |
 | `006_open_pr.sh` | Optional | Everyone | Only if you prefer the terminal over the website | Runs 005 and 004, pushes the branch, opens the PR and waits for the GitHub checks |
-| `007_setup_sonarqube.sh` | Once, admin only | Admin | Once | SonarQube projects, quality gate *VanRoey way* (coverage ≥ 80%), `SONAR_TOKEN` secret |
+| `007_setup_sonarqube.sh` | Once, admin only | Admin | Once | SonarQube projects (main branch `develop`), quality gate (*Sonar way* on the Free plan, *VanRoey way* prepared), `SONAR_TOKEN` secret |
 | `008_setup_environments.sh` | Once, admin only | Admin | Once | GitHub environments `test`, `acceptance`, `production` (approval) with their secrets |
 | `009_build_test.sh` | Optional | Everyone | Before pushing, if you want to know in advance | Build + lint + tests + coverage ≥ 80% (same as the *Build & test* check) |
 | `010_scan_dependencies.sh` | Optional | Everyone | After adding or updating a package | Vulnerable NuGet/npm packages (same as the *Dependency scan* check) |
@@ -233,6 +233,7 @@ If the repository is ever made private on GitHub Free, the script still runs but
 | `.github/workflows/_deploy.yml` | Reusable: resolve the images CI built, scan them again, deploy, smoke test (never builds) |
 | `.github/workflows/backup.yml`, `restore.yml`, `dr-test.yml` | Disaster recovery: nightly backups, restore (with approval), monthly restore test |
 | `docs/DISASTER_RECOVERY.md` | RPO/RTO per environment and runbooks |
+| `docs/TESTPLAN_IT2627T05-116.md` | Manual test plan for the CI/CD and quality/security stories (local and on GitHub) |
 | `.github/workflows/redeploy.yml` | Manual rollback / re-deploy of a version that was already built |
 | `deploy/compose.yml`, `deploy/compose.<dev\|test\|acc\|prod>.yml` | Docker Compose base + one file per DTAP environment |
 | `deploy/env/*.env.example` | Settings per environment (the real `.env` files are ignored by Git) |

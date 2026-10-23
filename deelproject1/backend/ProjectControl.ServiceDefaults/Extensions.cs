@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -84,7 +85,10 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        if (app.Environment.IsDevelopment())
+        // Outside Development the endpoints are only exposed when the deployment asks for it
+        // (HealthChecks__Enabled=true in deploy/compose.yml): Docker and the deploy script use
+        // /health to decide whether a release came up. They return only Healthy/Unhealthy.
+        if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("HealthChecks:Enabled"))
         {
             app.MapHealthChecks(HealthEndpointPath);
             app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions

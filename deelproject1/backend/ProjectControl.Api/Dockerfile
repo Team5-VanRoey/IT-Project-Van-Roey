@@ -1,3 +1,7 @@
+# API image. Built ONCE per backend source version by CI (scripts/014_images.sh) and the same
+# image runs in test, acceptance and production: it contains no environment settings.
+# Everything environment-specific comes in at runtime as environment variables
+# (ASPNETCORE_ENVIRONMENT, ConnectionStrings__ProjectControl, ...; see deploy/compose.yml).
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
@@ -8,7 +12,7 @@ COPY ProjectControl.Infrastructure/ProjectControl.Infrastructure.csproj ProjectC
 COPY ProjectControl.ServiceDefaults/ProjectControl.ServiceDefaults.csproj ProjectControl.ServiceDefaults/
 RUN dotnet restore ProjectControl.Api/ProjectControl.Api.csproj
 
-COPY . .
+COPY ../../../../../../Users/12303235/Downloads/fix-pr8/IT-Project-Van-Roey/deelproject1/backend/ProjectControl.Api .
 RUN dotnet publish ProjectControl.Api/ProjectControl.Api.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0

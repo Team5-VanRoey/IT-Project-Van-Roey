@@ -159,7 +159,12 @@ scan_backend() {
     /d:sonar.qualitygate.wait=true \
     /d:sonar.qualitygate.timeout=300
   while IFS= read -r p; do
-    [ -n "$p" ] && set -- "$@" "/d:$p"
+    case "$p" in
+      "") ;;
+      # The scanner for .NET refuses sonar.organization as /d: property: it must be /o:
+      sonar.organization=*) set -- "$@" "/o:${p#sonar.organization=}" ;;
+      *) set -- "$@" "/d:$p" ;;
+    esac
   done <<EOF
 $props
 EOF

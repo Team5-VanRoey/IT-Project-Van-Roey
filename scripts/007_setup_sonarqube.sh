@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sets up SonarQube and the dependency security settings. Run once by the repository admin.
+# Sets up SonarQube for the CI. Run once by an admin of the SonarQube organization.
 #
 #   1. SonarQube projects: <key> (backend) and <key>_frontend
 #   2. Quality gate "VanRoey way" (quality rule Q3, docs/QUALITY_AND_SECURITY.md):
@@ -7,14 +7,15 @@
 #        duplication on new code <= 3%    security hotspots on new code 100% reviewed
 #        new code: reliability, security and maintainability rating A
 #        overall: security rating A (no open vulnerabilities)
-#      and assigns it to both projects
+#      and assigns it to both projects (paid plans only, see below)
 #   3. GitHub: secret SONAR_TOKEN + variables SONAR_HOST_URL, SONAR_ORGANIZATION, SONAR_PROJECT_KEY
 #
 # Works with SonarCloud (default) and a SonarQube server. On SonarCloud the "Automatic Analysis"
 # is switched off, because the CI workflow does the analysis (with coverage).
-# SonarQube Cloud Free does not allow a custom quality gate: then the built-in "Sonar way" stays
-# active. It contains the same new-code conditions (incl. coverage on new code >= 80%); the
-# overall 80% is still enforced by the "Build & test" check (scripts/009_build_test.sh).
+# SonarQube Cloud Free: the custom gate can be created, but assigning it is refused (reported as
+# SKIPPED), so both projects keep the built-in "Sonar way". That gate has the same six new-code
+# conditions (incl. coverage on new code >= 80%); the overall 80% is enforced by the "Build & test"
+# check (scripts/009_build_test.sh). On a paid plan, running this script again assigns the gate.
 # The main branch is renamed to develop, because every PR targets develop.
 #
 # Requires: curl, GitHub CLI (gh auth login as repository admin).
@@ -158,7 +159,7 @@ EOF
   for k in "$key" "${key}_frontend"; do
     sonar POST qualitygates/select "$gate_ref" "projectKey=$k" \
       && step "quality gate '$gate' assigned to $k" \
-      || warn "assign quality gate to $k"
+      || warn "assign quality gate to $k (Free plan: 'Sonar way' stays active, see QUALITY_AND_SECURITY.md Q3)"
   done
 fi
 

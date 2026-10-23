@@ -23,13 +23,23 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
 
+// Development always migrates. In the DTAP environments the deployment decides
+// (Database__MigrateOnStartup in deploy/compose.yml), so production can migrate deliberately.
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ProjectControlDbContext>();
     dbContext.Database.Migrate();
 }
 
-app.UseHttpsRedirection();
+// Behind the reverse proxy (frontend container) TLS ends at the proxy, so no redirect there
+if (!app.Configuration.GetValue<bool>("BehindReverseProxy"))
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 

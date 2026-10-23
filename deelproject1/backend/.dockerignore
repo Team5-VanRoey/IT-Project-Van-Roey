@@ -3,3 +3,5 @@
 **/.vs/
 **/*.user
 .env
+**/TestResults/
+.env.*

@@ -4,7 +4,8 @@
     <DataCollectors>
       <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
-          <Format>cobertura</Format>
+          <!-- cobertura: our own 80% check (scripts/coverage_check.py), opencover: SonarQube -->
+          <Format>cobertura,opencover</Format>
           <Exclude>[ProjectControl.ServiceDefaults]*,[ProjectControl.AppHost]*,[ProjectControl.Api]Program</Exclude>
           <ExcludeByFile>**/Migrations/*.cs,**/obj/**/*.cs</ExcludeByFile>
           <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
